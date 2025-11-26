@@ -1,0 +1,18 @@
+{
+    "sourceFile": "composer.json",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1759242376199,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1759242376199,
+            "name": "Commit-0",
+            "content": "{\r\n    \"name\": \"ilekasoft/digiturk-rapor-sistemi\",\r\n    \"description\": \"Digitürk Rapor Sistemi - CSV ve Excel dosya yükleme ve işleme platformu\",\r\n    \"type\": \"project\",\r\n    \"license\": \"MIT\",\r\n    \"authors\": [\r\n        {\r\n            \"name\": \"İlekasoft\",\r\n            \"email\": \"info@ilekasoft.com\"\r\n        }\r\n    ],\r\n    \"require\": {\r\n        \"php\": \">=7.4\",\r\n        \"phpoffice/phpspreadsheet\": \"^1.29\"\r\n    },\r\n    \"require-dev\": {\r\n        \"phpunit/phpunit\": \"^9.0\"\r\n    },\r\n    \"autoload\": {\r\n        \"psr-4\": {\r\n            \"App\\\\\": \"src/\"\r\n        }\r\n    },\r\n    \"config\": {\r\n        \"optimize-autoloader\": true,\r\n        \"sort-packages\": true\r\n    }\r\n}"
+        }
+    ]
+}

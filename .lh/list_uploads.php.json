@@ -1,0 +1,18 @@
+{
+    "sourceFile": "list_uploads.php",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1760454336479,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1760454336479,
+            "name": "Commit-0",
+            "content": "<?php\r\nheader('Content-Type: application/json');\r\n\r\ntry {\r\n    $uploadDir = 'uploads/';\r\n    \r\n    // Uploads klasörünün varlığını kontrol et\r\n    if (!is_dir($uploadDir)) {\r\n        throw new Exception('Uploads klasörü bulunamadı');\r\n    }\r\n    \r\n    // Klasördeki dosyaları oku\r\n    $files = scandir($uploadDir);\r\n    $csvFiles = [];\r\n    \r\n    foreach ($files as $file) {\r\n        // . ve .. klasörlerini atla, sadece .csv dosyalarını al\r\n        if ($file !== '.' && $file !== '..' && is_file($uploadDir . $file)) {\r\n            $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));\r\n            if ($extension === 'csv') {\r\n                $csvFiles[] = $file;\r\n            }\r\n        }\r\n    }\r\n    \r\n    // Dosyaları tarih sırasına göre sırala (en yeni önce)\r\n    usort($csvFiles, function($a, $b) use ($uploadDir) {\r\n        $timeA = filemtime($uploadDir . $a);\r\n        $timeB = filemtime($uploadDir . $b);\r\n        return $timeB - $timeA; // Azalan sıra (en yeni önce)\r\n    });\r\n    \r\n    echo json_encode($csvFiles);\r\n    \r\n} catch (Exception $e) {\r\n    http_response_code(500);\r\n    echo json_encode(['error' => $e->getMessage()]);\r\n}\r\n?>"
+        }
+    ]
+}

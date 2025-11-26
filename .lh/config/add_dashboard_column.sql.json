@@ -1,0 +1,18 @@
+{
+    "sourceFile": "config/add_dashboard_column.sql",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1761118426512,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1761118426512,
+            "name": "Commit-0",
+            "content": "-- tanim_sayfalar tablosuna dashboard kolonu ekleme\r\n-- SQL Server Management Studio'da çalıştır\r\n\r\nUSE [digiturk_bireysel_ilekasoft_DB]\r\nGO\r\n\r\n-- Yeni kolon ekle\r\nALTER TABLE [dbo].[tanim_sayfalar]\r\nADD [dashboard] BIT NOT NULL DEFAULT 0\r\nGO\r\n\r\n-- Bazı önemli sayfaları dashboard'da göster\r\nUPDATE [dbo].[tanim_sayfalar] \r\nSET [dashboard] = 1 \r\nWHERE [sayfa_id] IN (\r\n    6,  -- Kullanıcı Yönetimi\r\n    8,  -- Hakediş Hesaplama\r\n    9,  -- Bayi Hakediş Tanımlama\r\n    11, -- Bayi Günlük Satış Adet\r\n    13, -- Iris Rapor Yükleme\r\n    14  -- Primebaz Rapor Analizi\r\n)\r\nGO\r\n\r\n-- Kontrol et\r\nSELECT \r\n    s.sayfa_id,\r\n    s.sayfa_adi,\r\n    s.dashboard,\r\n    m.menu_adi,\r\n    mo.modul_adi\r\nFROM [dbo].[tanim_sayfalar] s\r\nINNER JOIN [dbo].[tanim_menuler] m ON s.menu_id = m.menu_id\r\nINNER JOIN [dbo].[tanim_moduller] mo ON m.modul_id = mo.modul_id\r\nWHERE s.dashboard = 1\r\nORDER BY s.sira_no\r\nGO\r\n\r\nPRINT 'dashboard kolonu başarıyla eklendi ve ayarlandı!'\r\nGO\r\n\r\n"
+        }
+    ]
+}

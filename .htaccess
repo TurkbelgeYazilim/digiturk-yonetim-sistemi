@@ -1,0 +1,38 @@
+# IRIS Rapor Sistemi - PHP Ayarları
+# Büyük CSV dosyaları için özelleştirilmiş ayarlar
+
+# Dosya yükleme limitlerini artır
+php_value upload_max_filesize 50M
+php_value post_max_size 50M
+php_value max_input_time 600
+php_value max_execution_time 600
+php_value memory_limit 512M
+
+# CSV işleme için gerekli ayarlar
+php_value max_input_vars 10000
+php_value max_file_uploads 20
+
+# Hata raporlama (debug için)
+php_flag display_errors off
+php_flag log_errors on
+
+# Güvenlik başlıkları
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options nosniff
+    Header always set X-Frame-Options DENY
+    Header always set X-XSS-Protection "1; mode=block"
+</IfModule>
+
+# Cache kontrol
+<IfModule mod_expires.c>
+    ExpiresActive Off
+</IfModule>
+
+# Gzip sıkıştırma JSON responses için
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE application/json
+    AddOutputFilterByType DEFLATE text/plain
+    AddOutputFilterByType DEFLATE text/html
+    AddOutputFilterByType DEFLATE text/css
+    AddOutputFilterByType DEFLATE application/javascript
+</IfModule>

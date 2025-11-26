@@ -1,0 +1,18 @@
+{
+    "sourceFile": "BAYI_ODEME_FIX_NOTES.md",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1758981945437,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1758981945437,
+            "name": "Commit-0",
+            "content": "# Bayi Ödeme Yönetimi Sayfası Düzeltmeleri\r\n\r\n## Yapılan Değişikler\r\n\r\n### 1. MSSQLConnection.php Bağımlılığını Kaldırma\r\n- `MSSQLConnection.php` sınıfını kullanma yerine inline database bağlantısı yapıldı\r\n- `config/mssql.php` dosyasındaki bilgiler kullanılarak PDO bağlantısı oluşturuldu\r\n\r\n### 2. Tablo Oluşturma SQL'i Düzeltildi\r\n- `create_odeme_tables.sql` dosyası eksikti, oluşturuldu\r\n- Tablo oluşturma kodları inline olarak `createTables()` fonksiyonuna taşındı\r\n- Foreign key constraints ON DELETE CASCADE yerine sadece FOREIGN KEY yapıldı\r\n\r\n### 3. Hata Yakalama ve Görüntüleme İyileştirildi\r\n- Veritabanı hatalarını yakalayıp kullanıcıya göstermek için hata mesajı sistemi eklendi\r\n- AJAX işlemleri için daha kapsamlı hata yakalama\r\n- JavaScript'te timeout ve daha detaylı hata mesajları\r\n\r\n### 4. Dosya Yükleme İyileştirildi\r\n- Upload dizini (`uploads/dekontlar/`) otomatik olarak oluşturulması sağlandı\r\n- Dosya yükleme hatalarında özel hata mesajları\r\n- Desteklenmeyen dosya türleri için kontrol\r\n\r\n### 5. JavaScript İyileştirmeleri\r\n- AJAX işlemlerinde timeout eklendi (30 saniye)\r\n- Loading state gösterimi\r\n- Daha iyi hata mesajları\r\n- Submit button disable/enable durumları\r\n- JSON response parsing kontrolü\r\n\r\n### 6. SQL Server Uyumluluğu\r\n- SCOPE_IDENTITY() kullanımı doğru şekilde yapıldı\r\n- NVARCHAR türleri UTF-8 desteği için kullanıldı\r\n- SQL Server'a uygun tablo yapısı\r\n\r\n## Oluşturulan/Düzenlenen Dosyalar\r\n\r\n1. **bayi_odeme_yonetimi.php** - Ana dosya tamamen refactor edildi\r\n2. **create_odeme_tables.sql** - Eksik SQL dosyası oluşturuldu\r\n3. **uploads/dekontlar/** - Upload dizini oluşturuldu\r\n\r\n## Veritabanı Tabloları\r\n\r\n### 1. odeme_turleri\r\n- Ödeme türlerini tutan tablo\r\n- Varsayılan türler otomatik eklenir: Hakediş, Prim, Fatura Kesintisi, Diğer, Kesinti\r\n\r\n### 2. bayi_odemeleri\r\n- Ana ödemeler tablosu\r\n- Kullanıcı tanımlamanızda belirtilen sütunlara uygun\r\n- Dosya bilgileri için ek sütunlar\r\n\r\n### 3. odeme_logları\r\n- Ödeme işlem geçmişi için log tablosu\r\n\r\n## Test Edilmesi Gerekenler\r\n\r\n1. ✅ Sayfa HTTP 500 hatası vermeden açılıyor\r\n2. 🔲 Ödeme listesi yükleniyor mu\r\n3. 🔲 Yeni ödeme ekleme çalışıyor mu\r\n4. 🔲 Dosya yükleme çalışıyor mu\r\n5. 🔲 Filtreleme sistemi çalışıyor mu\r\n\r\n## Notlar\r\n\r\n- Kod artık MSSQLConnection.php sınıfından bağımsız çalışıyor\r\n- Veritabanı bağlantısı config/mssql.php'deki bilgileri kullanıyor\r\n- Tüm SQL Server özelliklerine uygun olarak yazıldı\r\n- Hata durumlarında kullanıcı dostu mesajlar gösteriliyor"
+        }
+    ]
+}

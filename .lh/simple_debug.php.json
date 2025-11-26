@@ -1,0 +1,18 @@
+{
+    "sourceFile": "simple_debug.php",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1759333257158,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1759333257158,
+            "name": "Commit-0",
+            "content": "<?php\r\n// Simple debug script to test bayi_tanimlama issues\r\n$logFile = __DIR__ . '/bayi_debug.log';\r\n\r\nfunction writeLog($message) {\r\n    global $logFile;\r\n    $timestamp = date('Y-m-d H:i:s');\r\n    file_put_contents($logFile, \"[$timestamp] $message\\n\", FILE_APPEND | LOCK_EX);\r\n}\r\n\r\nwriteLog(\"=== BAYI TANIMLAMA DEBUG START ===\");\r\n\r\n// Test 1: Basic PHP info\r\nwriteLog(\"PHP Version: \" . phpversion());\r\nwriteLog(\"Extensions: \" . implode(', ', get_loaded_extensions()));\r\n\r\n// Test 2: Session\r\ntry {\r\n    if (session_status() == PHP_SESSION_NONE) {\r\n        session_start();\r\n    }\r\n    writeLog(\"Session started successfully. ID: \" . session_id());\r\n    writeLog(\"Session data: \" . print_r($_SESSION, true));\r\n} catch (Exception $e) {\r\n    writeLog(\"Session error: \" . $e->getMessage());\r\n}\r\n\r\n// Test 3: Auth file\r\ntry {\r\n    require_once 'auth.php';\r\n    writeLog(\"Auth file loaded successfully\");\r\n    \r\n    // Test auth functions\r\n    if (function_exists('checkAuth')) {\r\n        writeLog(\"checkAuth function exists\");\r\n    }\r\n    if (function_exists('checkAdminAuth')) {\r\n        writeLog(\"checkAdminAuth function exists\");\r\n    }\r\n    \r\n} catch (Exception $e) {\r\n    writeLog(\"Auth file error: \" . $e->getMessage());\r\n}\r\n\r\n// Test 4: Database config\r\ntry {\r\n    $configFile = __DIR__ . '/config/mssql.php';\r\n    if (file_exists($configFile)) {\r\n        $config = include $configFile;\r\n        writeLog(\"Database config loaded. Host: \" . $config['host'] . \", Database: \" . $config['database']);\r\n    } else {\r\n        writeLog(\"Config file not found: \" . $configFile);\r\n    }\r\n} catch (Exception $e) {\r\n    writeLog(\"Config error: \" . $e->getMessage());\r\n}\r\n\r\n// Test 5: Database connection\r\ntry {\r\n    $dsn = \"sqlsrv:Server={$config['host']};Database={$config['database']};TrustServerCertificate=yes\";\r\n    $pdo = new PDO($dsn, $config['username'], $config['password'], [\r\n        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,\r\n        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,\r\n        PDO::SQLSRV_ATTR_ENCODING => PDO::SQLSRV_ENCODING_UTF8,\r\n        PDO::ATTR_EMULATE_PREPARES => false\r\n    ]);\r\n    writeLog(\"Database connection successful\");\r\n    \r\n    // Test tables\r\n    $stmt = $pdo->query(\"SELECT name FROM sys.tables WHERE name IN ('users', 'users_bayi', 'user_groups')\");\r\n    $tables = $stmt->fetchAll();\r\n    writeLog(\"Tables found: \" . print_r($tables, true));\r\n    \r\n} catch (Exception $e) {\r\n    writeLog(\"Database connection error: \" . $e->getMessage());\r\n}\r\n\r\nwriteLog(\"=== BAYI TANIMLAMA DEBUG END ===\");\r\n\r\necho \"Debug completed. Check bayi_debug.log file for results.\";\r\n?>"
+        }
+    ]
+}

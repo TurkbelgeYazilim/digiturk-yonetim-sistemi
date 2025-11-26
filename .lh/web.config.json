@@ -1,0 +1,18 @@
+{
+    "sourceFile": "web.config",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1759329500397,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1759329500397,
+            "name": "Commit-0",
+            "content": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n<!-- the root web configuration file -->\r\n<configuration>\r\n  <system.web>\r\n    <compilation tempDirectory=\"E:\\Inetpub\\vhosts\\ilekasoft.com\\tmp\" />\r\n  </system.web>\r\n</configuration>"
+        }
+    ]
+}

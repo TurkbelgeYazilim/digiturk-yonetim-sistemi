@@ -1,0 +1,27 @@
+ Volume in drive E is New Volume
+ Volume Serial Number is FE73-B73E
+
+ Directory of E:\Inetpub\vhosts\ilekasoft.com\digiturk.ilekasoft.com\uploads\primebaz
+
+02.10.2025  10:44    <DIR>          .
+02.10.2025  10:44    <DIR>          ..
+15.09.2025  13:14         1.445.448 ARALIK'24.xlsx
+15.09.2025  13:09         2.175.837 A¦USTOS'24.xlsx
+15.09.2025  13:10         1.500.359 EK˜M'24.xlsx
+15.09.2025  13:09         1.325.487 EYLUL'24.xlsx
+15.09.2025  13:02           613.263 HAZ˜RAN'24.xlsx
+15.09.2025  13:26         1.850.577 HAZ˜RAN'25.xlsx
+15.09.2025  13:14         1.554.075 KASIM'24.xlsx
+02.10.2025  10:44                 0 list.txt
+15.09.2025  13:00         1.330.408 MART'24.xlsx
+15.09.2025  13:30         1.213.806 MART'25.xlsx
+15.09.2025  13:01           927.287 MAYIS'24.xlsx
+15.09.2025  13:22         1.740.451 MAYIS'25.xlsx
+15.09.2025  13:00           989.989 N˜SAN'24.xlsx
+15.09.2025  13:21         1.605.067 N˜SAN'25.xlsx
+15.09.2025  13:16         1.196.019 OCAK'25.xlsx
+15.09.2025  13:02         1.512.608 TEMMUZ'24.xlsx
+15.09.2025  13:28         2.687.511 TEMMUZ'25.xlsx
+15.09.2025  13:16         1.503.216 žUBAT'25.xlsx
+              18 File(s)     25.171.408 bytes
+               2 Dir(s)  461.153.665.024 bytes free

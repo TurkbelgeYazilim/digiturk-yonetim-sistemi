@@ -1,0 +1,18 @@
+{
+    "sourceFile": "LOGIN_SECURITY_FIX.md",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1758982253562,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1758982253562,
+            "name": "Commit-0",
+            "content": "# Login Sayfası Test Kullanıcıları Kaldırma\r\n\r\n## Yapılan Değişiklik\r\n\r\n### Kaldırılan Bölüm\r\nLogin sayfasının altında bulunan test kullanıcıları bölümü tamamen kaldırıldı:\r\n\r\n```html\r\n<!-- Test Kullanıcıları -->\r\n<div class=\"mt-4\">\r\n    <small class=\"text-muted\">\r\n        <strong>Test Kullanıcıları:</strong><br>\r\n        <span class=\"badge bg-danger me-1\">Admin</span> batuhan.kahraman@turkbelge.com.tr / admin123<br>\r\n        <span class=\"badge bg-warning me-1\">Bölge</span> bolge@ilekasoft.com / test123<br>\r\n        <span class=\"badge bg-info me-1\">Bayi</span> bayi@ilekasoft.com / test123\r\n    </small>\r\n</div>\r\n```\r\n\r\n## Güvenlik İyileştirmesi\r\n\r\n### Önceki Durum ❌\r\n- Test kullanıcı bilgileri herkese açık şekilde görünüyordu\r\n- E-posta adresleri ve şifreler sayfada yazılıydi\r\n- Güvenlik açığı oluşturuyordu\r\n\r\n### Sonraki Durum ✅\r\n- Test kullanıcı bilgileri artık görünmüyor\r\n- Login sayfası temiz ve profesyonel görünüyor\r\n- Güvenlik açığı kapatıldı\r\n\r\n## Test Sonucu\r\n\r\n✅ Login sayfası başarıyla açılıyor  \r\n✅ Test kullanıcı bilgileri görünmüyor  \r\n✅ Sayfa tasarımı bozulmadı  \r\n✅ Diğer özellikler çalışmaya devam ediyor\r\n\r\n## Korunan Bilgiler\r\n\r\nKaldırılan test kullanıcıları:\r\n- **Admin:** batuhan.kahraman@turkbelge.com.tr / admin123\r\n- **Bölge:** bolge@ilekasoft.com / test123  \r\n- **Bayi:** bayi@ilekasoft.com / test123\r\n\r\nBu bilgiler artık güvenli bir şekilde saklanmalı ve sadece geliştirici ekibin bilmesi gerekiyor."
+        }
+    ]
+}

@@ -1,0 +1,18 @@
+{
+    "sourceFile": "bayi_tanimlama_backup.php",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1759333257156,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1759333257156,
+            "name": "Commit-0",
+            "content": "<?php\r\n// Emergency fallback version of bayi_tanimlama.php\r\nsession_start();\r\n\r\n// Check if user is logged in\r\nif (!isset($_SESSION['user_id'])) {\r\n    header('Location: login.php');\r\n    exit;\r\n}\r\n\r\n// Check if user is admin\r\nif (!isset($_SESSION['user_group_name']) || $_SESSION['user_group_name'] !== 'admin') {\r\n    header('Location: index.php?error=no_permission');\r\n    exit;\r\n}\r\n\r\necho \"<!DOCTYPE html>\";\r\necho \"<html lang='tr'>\";\r\necho \"<head>\";\r\necho \"<meta charset='UTF-8'>\";\r\necho \"<title>Bayi Tanımlama - Geçici Sayfa</title>\";\r\necho \"<link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' rel='stylesheet'>\";\r\necho \"</head>\";\r\necho \"<body>\";\r\necho \"<div class='container mt-5'>\";\r\necho \"<div class='alert alert-warning'>\";\r\necho \"<h4>Bayi Tanımlama Sayfası Geçici Olarak Kapalı</h4>\";\r\necho \"<p>Sayfa şu anda teknik bakım altındadır. Lütfen daha sonra tekrar deneyiniz.</p>\";\r\necho \"<p><a href='index.php' class='btn btn-primary'>Ana Sayfaya Dön</a></p>\";\r\necho \"</div>\";\r\necho \"</div>\";\r\necho \"</body>\";\r\necho \"</html>\";\r\n?>"
+        }
+    ]
+}

@@ -1,0 +1,18 @@
+{
+    "sourceFile": "simple_check.php",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1759561113040,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1759561113040,
+            "name": "Commit-0",
+            "content": "<?php\r\n// Simple test to check current state\r\nerror_reporting(E_ALL);\r\nini_set('display_errors', 1);\r\n\r\nrequire_once 'config/mssql.php';\r\n\r\ntry {\r\n    $conn = getDatabaseConnection();\r\n    \r\n    // Check exact query used in main file\r\n    $sql = \"SELECT DISTINCT ht.*, u.first_name, u.last_name, u.email\r\n            FROM hakedis_tanim ht\r\n            INNER JOIN users u ON ht.bayi_id = u.id\r\n            ORDER BY ht.created_at DESC\";\r\n    \r\n    $stmt = $conn->prepare($sql);\r\n    $stmt->execute();\r\n    $results = $stmt->fetchAll(PDO::FETCH_ASSOC);\r\n    \r\n    echo \"<h3>Current Database State:</h3>\\n\";\r\n    echo \"<p>Total records: \" . count($results) . \"</p>\\n\";\r\n    \r\n    $ids = array_column($results, 'id');\r\n    $idCounts = array_count_values($ids);\r\n    \r\n    echo \"<h4>ID Distribution:</h4>\\n\";\r\n    foreach ($idCounts as $id => $count) {\r\n        $style = $count > 1 ? ' style=\"color: red; font-weight: bold;\"' : '';\r\n        echo \"<span$style>ID $id: $count times</span><br>\\n\";\r\n    }\r\n    \r\n    // Show first few records\r\n    echo \"<h4>First 5 Records:</h4>\\n\";\r\n    for ($i = 0; $i < min(5, count($results)); $i++) {\r\n        $record = $results[$i];\r\n        echo \"<div style='border: 1px solid #ccc; margin: 5px; padding: 10px;'>\\n\";\r\n        echo \"Record $i: ID={$record['id']}, Bayi={$record['first_name']} {$record['last_name']}, Created={$record['created_at']}<br>\\n\";\r\n        echo \"</div>\\n\";\r\n    }\r\n    \r\n} catch (Exception $e) {\r\n    echo \"Error: \" . $e->getMessage();\r\n}\r\n?>"
+        }
+    ]
+}

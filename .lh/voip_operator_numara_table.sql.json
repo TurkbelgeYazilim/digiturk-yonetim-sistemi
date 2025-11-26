@@ -1,0 +1,18 @@
+{
+    "sourceFile": "voip_operator_numara_table.sql",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1760606094051,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1760606094051,
+            "name": "Commit-0",
+            "content": "-- VoIP Numara Tablosu SQL'i\r\nCREATE TABLE [dbo].[voip_operator_numara](\r\n    [voip_operator_numara_id] [int] IDENTITY(1,1) NOT NULL,\r\n    [voip_operator_tanim_id] [int] NOT NULL,\r\n    [voip_operator_numara_VoIPNo] [nvarchar](20) NOT NULL,\r\n    [voip_operator_numara_Sifre] [nvarchar](20) NULL,\r\n    [voip_operator_numara_IP] [nvarchar](50) NULL,\r\n    [voip_operator_numara_Aciklama] [nvarchar](100) NULL,\r\n    [voip_operator_numara_durum] [bit] NOT NULL,\r\n    [voip_operator_numara_olusturmaTarihi] [date] NOT NULL,\r\nPRIMARY KEY CLUSTERED \r\n(\r\n\t[voip_operator_numara_id] ASC\r\n)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]\r\n) ON [PRIMARY]\r\nGO\r\n\r\n-- Default değerler\r\nALTER TABLE [dbo].[voip_operator_numara] ADD DEFAULT ((1)) FOR [voip_operator_numara_durum]\r\nGO\r\nALTER TABLE [dbo].[voip_operator_numara] ADD DEFAULT (getdate()) FOR [voip_operator_numara_olusturmaTarihi]\r\nGO\r\n\r\n-- Foreign Key\r\nALTER TABLE [dbo].[voip_operator_numara]  WITH CHECK ADD  CONSTRAINT [FK_voip_operator_numara_tanim] FOREIGN KEY([voip_operator_tanim_id])\r\nREFERENCES [dbo].[voip_operator_tanim] ([voip_operator_id])\r\nON UPDATE CASCADE\r\nON DELETE CASCADE\r\nGO\r\n\r\nALTER TABLE [dbo].[voip_operator_numara] CHECK CONSTRAINT [FK_voip_operator_numara_tanim]\r\nGO"
+        }
+    ]
+}

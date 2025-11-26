@@ -1,0 +1,26 @@
+{
+    "sourceFile": "config/mssql.php",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 2,
+            "patches": [
+                {
+                    "date": 1758978276605,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                },
+                {
+                    "date": 1760453521791,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -2,8 +2,8 @@\n // MSSQL veritabanı bağlantı ayarları\r\n return [\r\n     'url' => 'digiturk.ilekasoft.com',\r\n     'host' => 'localhost\\\\SQLEXPRESS',\r\n-    'database' => 'digiturk',\r\n+    'database' => 'digiturk_bireysel_ilekasoft_DB',\r\n     'username' => 'digiturk',\r\n-    'password' => 'nTb*$fcte5Q8j6uZ',\r\n+    'password' => 'cSg69xE_xrcYfz%0',\r\n ];\r\n"
+                },
+                {
+                    "date": 1760453565301,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -3,7 +3,7 @@\n return [\r\n     'url' => 'digiturk.ilekasoft.com',\r\n     'host' => 'localhost\\\\SQLEXPRESS',\r\n     'database' => 'digiturk_bireysel_ilekasoft_DB',\r\n-    'username' => 'digiturk',\r\n-    'password' => 'cSg69xE_xrcYfz%0',\r\n+    'username' => 'digiturk_bireysel_ilekasoft_user',\r\n+    'password' => '2f*1y5Wf3',\r\n ];\r\n"
+                }
+            ],
+            "date": 1758978276605,
+            "name": "Commit-0",
+            "content": "<?php\r\n// MSSQL veritabanı bağlantı ayarları\r\nreturn [\r\n    'url' => 'digiturk.ilekasoft.com',\r\n    'host' => 'localhost\\\\SQLEXPRESS',\r\n    'database' => 'digiturk',\r\n    'username' => 'digiturk',\r\n    'password' => 'nTb*$fcte5Q8j6uZ',\r\n];\r\n"
+        }
+    ]
+}

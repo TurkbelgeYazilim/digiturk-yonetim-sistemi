@@ -1,0 +1,18 @@
+{
+    "sourceFile": ".user.ini",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1760453521574,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1760453521574,
+            "name": "Commit-0",
+            "content": "[PHP]\r\nopen_basedir=\"D:/inetpub/ilekasoft.com\\;C:\\Windows\\Temp\\\"\r\nerror_reporting=22519\r\nmemory_limit=256M\r\nmax_execution_time=600\r\nmax_input_time=600\r\npost_max_size=128M\r\nupload_max_filesize=130M\r\nerror_log=\"D:\\inetpub\\ilekasoft.com\\logs\\php_errors\\digiturk.ilekasoft.com\\php_error.log\""
+        }
+    ]
+}

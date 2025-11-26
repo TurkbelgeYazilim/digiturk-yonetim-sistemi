@@ -1,0 +1,18 @@
+{
+    "sourceFile": "IRIS_RAPOR_MENU_NOTES.md",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1758982786195,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1758982786195,
+            "name": "Commit-0",
+            "content": "# İris Rapor Alt Menüsü Ekleme İşlemi\r\n\r\n## Yapılan Değişikler\r\n\r\n### 1. Yönetim Menüsü Altında İris Rapor Alt Menüsü Oluşturuldu\r\n\r\n**Eklenen menü öğeleri:**\r\n- 📊 **Iris Rapor Yükleme** → `iris_rapor_yukle.php`\r\n- 📋 **Iris Karşılaştırma** → `iris_karsilastirma.php`\r\n\r\n### 2. Menü Yapısı Yeniden Organize Edildi\r\n\r\n**Önceki yapı:**\r\n```\r\nYönetim\r\n├── Kullanıcı Yönetimi (Admin)\r\n├── Kullanıcı Grupları (Admin)\r\n├── Bayi Tanımlama (Admin)\r\n├── Muhasebe ► (Admin)\r\n│   ├── Bayi Ödeme Yönetimi\r\n│   ├── Bayi Hakediş Tanımlama\r\n│   └── Hakediş Hesaplama\r\n├── Iris Rapor Yükleme\r\n└── Iris Karşılaştırma\r\n```\r\n\r\n**Yeni yapı:**\r\n```\r\nYönetim\r\n├── Kullanıcı Yönetimi (Admin)\r\n├── Kullanıcı Grupları (Admin)  \r\n├── Bayi Tanımlama (Admin)\r\n├── Muhasebe ► (Admin)\r\n│   ├── Bayi Ödeme Yönetimi\r\n│   ├── Bayi Hakediş Tanımlama\r\n│   └── Hakediş Hesaplama\r\n└── İris Rapor ►\r\n    ├── Iris Rapor Yükleme\r\n    └── Iris Karşılaştırma\r\n```\r\n\r\n### 3. Özellikler\r\n\r\n**Alt Menü Özellikleri:**\r\n- **İkon:** Chart-line ikonu (📊) kullanıldı\r\n- **Konum:** Yönetim menüsünün altında\r\n- **Erişim:** Tüm giriş yapmış kullanıcılar erişebilir\r\n- **Açılış:** Sağa doğru (dropend) açılır\r\n\r\n**Menü Öğeleri:**\r\n- **Iris Rapor Yükleme:** Upload ikonu ile\r\n- **Iris Karşılaştırma:** Copy ikonu ile\r\n\r\n### 4. CSS ve JavaScript Desteği\r\n\r\nMevcut dropend CSS ve JavaScript kodları bu alt menü için de çalışıyor:\r\n- Hover ile açılma\r\n- Click ile toggle\r\n- Dış tıklamada kapatma\r\n- Responsive tasarım desteği\r\n\r\n## Test Sonuçları\r\n\r\n✅ İris Rapor alt menüsü başarıyla oluşturuldu  \r\n✅ Alt menü hover ile açılıyor  \r\n✅ Alt menü click ile toggle çalışıyor  \r\n✅ Menü öğeleri doğru sayfalara yönlendiriyor  \r\n✅ Responsive tasarım korunuyor  \r\n✅ Diğer menüler etkilenmedi\r\n\r\n## Menü Hiyerarşisi\r\n\r\n**Yönetim Menüsü:** Ana menü  \r\n└── **İris Rapor:** Alt menü  \r\n    ├── **Iris Rapor Yükleme:** Sayfa linki  \r\n    └── **Iris Karşılaştırma:** Sayfa linki\r\n\r\n## Erişim Kontrolü\r\n\r\n- **İris Rapor Alt Menüsü:** Tüm kullanıcılar görebilir\r\n- **Muhasebe Alt Menüsü:** Sadece admin kullanıcılar görebilir\r\n- **Diğer admin menüleri:** Sadece admin kullanıcılar görebilir\r\n\r\nBu düzenleme ile iris rapor işlemleri daha organize bir şekilde gruplandırıldı!"
+        }
+    ]
+}

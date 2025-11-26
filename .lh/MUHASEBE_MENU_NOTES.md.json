@@ -1,0 +1,18 @@
+{
+    "sourceFile": "MUHASEBE_MENU_NOTES.md",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1758982181641,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1758982181641,
+            "name": "Commit-0",
+            "content": "# Muhasebe Menüsü Ekleme İşlemi\r\n\r\n## Yapılan Değişikler\r\n\r\n### 1. Yönetim Menüsü Altında Muhasebe Alt Menüsü Oluşturuldu\r\n\r\n**Eklenen menü öğeleri:**\r\n- 💰 **Bayi Ödeme Yönetimi** → `bayi_odeme_yonetimi.php`\r\n- ⚙️ **Bayi Hakediş Tanımlama** → `bayi_hakedis_tanimla.php`\r\n- 🧮 **Hakediş Hesaplama** → `hakedis_hesapla.php`\r\n\r\n### 2. Menü Yapısı Yeniden Organize Edildi\r\n\r\n**Önceki yapı:**\r\n```\r\nYönetim\r\n├── Kullanıcı Yönetimi\r\n├── Kullanıcı Grupları  \r\n├── Bayi Tanımlama\r\n├── Bayi Ödeme Yönetimi\r\n├── Bayi Hakediş Tanımlama\r\n├── Hakediş Hesaplama\r\n├── Iris Rapor Yükleme\r\n└── Iris Karşılaştırma\r\n```\r\n\r\n**Yeni yapı:**\r\n```\r\nYönetim\r\n├── Kullanıcı Yönetimi\r\n├── Kullanıcı Grupları  \r\n├── Bayi Tanımlama\r\n├── Muhasebe ►\r\n│   ├── Bayi Ödeme Yönetimi\r\n│   ├── Bayi Hakediş Tanımlama\r\n│   └── Hakediş Hesaplama\r\n├── Iris Rapor Yükleme\r\n└── Iris Karşılaştırma\r\n```\r\n\r\n### 3. CSS ve JavaScript Geliştirmeleri\r\n\r\n**CSS Eklemeleri:**\r\n- `.dropend` sınıfı için sağa açılan menü stilleri\r\n- Hover efektleri ve geçiş animasyonları\r\n- Alt menü konumlandırma düzeltmeleri\r\n\r\n**JavaScript Eklemeleri:**\r\n- Hover ile alt menü açma/kapama\r\n- Click ile toggle işlevselliği  \r\n- Dış tıklamada menü kapatma\r\n- Event propagation kontrolü\r\n\r\n### 4. Kullanıcı Deneyimi İyileştirmeleri\r\n\r\n- **Hover ile açılma:** Mouse ile üzerine gelince alt menü açılır\r\n- **Click ile toggle:** Tıklama ile de menü açılıp kapanır\r\n- **Dış tıklamada kapatma:** Menü dışına tıklayınca otomatik kapanır\r\n- **Görsel iyileştirmeler:** Oklar ve spacing düzeltmeleri\r\n\r\n## Test Sonuçları\r\n\r\n✅ Menü başarıyla oluşturuldu  \r\n✅ Alt menü hover ile açılıyor  \r\n✅ Alt menü click ile toggle çalışıyor  \r\n✅ Dış tıklamada menü kapanıyor  \r\n✅ Tüm linkler doğru çalışıyor  \r\n✅ Responsive tasarım korunuyor\r\n\r\n## Notlar\r\n\r\n- Muhasebe menüsü sadece admin kullanıcılar için görünür\r\n- Alt menü öğeleri sağa doğru açılır (dropend)\r\n- Bootstrap 5.3.0 ile tam uyumlu\r\n- Türkçe karakter desteği mevcut"
+        }
+    ]
+}

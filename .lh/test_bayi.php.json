@@ -1,0 +1,18 @@
+{
+    "sourceFile": "test_bayi.php",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1759333257155,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1759333257155,
+            "name": "Commit-0",
+            "content": "<?php\r\n// Minimal test version of bayi_tanimlama.php\r\nini_set('display_errors', 1);\r\nerror_reporting(E_ALL);\r\n\r\necho \"<!DOCTYPE html><html><head><title>Bayi Tanımlama Test</title></head><body>\";\r\necho \"<h1>Bayi Tanımlama Test</h1>\";\r\n\r\ntry {\r\n    echo \"<p>1. Testing session...</p>\";\r\n    if (session_status() == PHP_SESSION_NONE) {\r\n        session_start();\r\n    }\r\n    echo \"<p>✓ Session started</p>\";\r\n    \r\n    echo \"<p>2. Testing auth...</p>\";\r\n    require_once 'auth.php';\r\n    echo \"<p>✓ Auth file loaded</p>\";\r\n    \r\n    echo \"<p>3. Testing database...</p>\";\r\n    $configFile = __DIR__ . '/config/mssql.php';\r\n    $config = include $configFile;\r\n    $dsn = \"sqlsrv:Server={$config['host']};Database={$config['database']};TrustServerCertificate=yes\";\r\n    $pdo = new PDO($dsn, $config['username'], $config['password']);\r\n    echo \"<p>✓ Database connected</p>\";\r\n    \r\n    echo \"<p>4. Testing queries...</p>\";\r\n    $stmt = $pdo->query(\"SELECT COUNT(*) as count FROM users\");\r\n    $result = $stmt->fetch();\r\n    echo \"<p>✓ Users count: \" . $result['count'] . \"</p>\";\r\n    \r\n    $stmt = $pdo->query(\"SELECT COUNT(*) as count FROM users_bayi\");\r\n    $result = $stmt->fetch();\r\n    echo \"<p>✓ Bayi count: \" . $result['count'] . \"</p>\";\r\n    \r\n    echo \"<p><strong>All tests passed! The basic infrastructure is working.</strong></p>\";\r\n    echo \"<p><a href='bayi_tanimlama.php'>Try the actual page now</a></p>\";\r\n    \r\n} catch (Exception $e) {\r\n    echo \"<p><strong>❌ Error:</strong> \" . htmlspecialchars($e->getMessage()) . \"</p>\";\r\n    echo \"<p><strong>Stack trace:</strong><br>\" . nl2br(htmlspecialchars($e->getTraceAsString())) . \"</p>\";\r\n}\r\n\r\necho \"</body></html>\";\r\n?>"
+        }
+    ]
+}

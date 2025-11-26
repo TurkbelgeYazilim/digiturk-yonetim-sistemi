@@ -1,0 +1,18 @@
+{
+    "sourceFile": "test_primebaz.php",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1759322293938,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1759322293938,
+            "name": "Commit-0",
+            "content": "<?php\r\n// Simple test to check if the page is accessible\r\necho \"Primebaz Rapor Analizi sayfası başarıyla oluşturuldu!<br>\";\r\necho \"Tarih: \" . date('Y-m-d H:i:s') . \"<br>\";\r\necho \"Dosya yolu: \" . __FILE__ . \"<br>\";\r\n\r\n// Test database connectivity\r\ntry {\r\n    require_once 'MSSQLConnection.php';\r\n    $db = new MSSQLConnection();\r\n    $conn = $db->getConnection();\r\n    echo \"Veritabanı bağlantısı: BAŞARILI<br>\";\r\n    \r\n    // Test if primebaz_rapor table exists\r\n    $sql = \"SELECT COUNT(*) as table_exists FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'primebaz_rapor'\";\r\n    $stmt = $conn->prepare($sql);\r\n    $stmt->execute();\r\n    $tableExists = $stmt->fetch(PDO::FETCH_ASSOC)['table_exists'] > 0;\r\n    \r\n    echo \"Primebaz rapor tablosu: \" . ($tableExists ? \"MEVCUT\" : \"YOK\") . \"<br>\";\r\n    \r\n} catch (Exception $e) {\r\n    echo \"Veritabanı hatası: \" . $e->getMessage() . \"<br>\";\r\n}\r\n\r\necho \"<br><a href='primebaz_rapor_analiz.php'>Ana sayfaya dön</a>\";\r\n?>"
+        }
+    ]
+}

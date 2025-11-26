@@ -1,0 +1,18 @@
+{
+    "sourceFile": "test_connection.php",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1760453521778,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1760453521778,
+            "name": "Commit-0",
+            "content": "<?php\r\n// Veritabanı bağlantı testi\r\ntry {\r\n    require_once 'auth.php';\r\n    \r\n    echo \"<h2>Sistem Kontrol Raporu</h2>\";\r\n    echo \"<hr>\";\r\n    \r\n    // 1. Dizin kontrolleri\r\n    echo \"<h3>1. Dizin Kontrolleri</h3>\";\r\n    echo \"Mevcut dizin: \" . __DIR__ . \"<br>\";\r\n    echo \"Config dosyası: \" . (__DIR__ . '/config/mssql.php') . \" - \" . (file_exists(__DIR__ . '/config/mssql.php') ? \"✅ Mevcut\" : \"❌ Yok\") . \"<br>\";\r\n    echo \"Uploads dizini: \" . (__DIR__ . '/uploads') . \" - \" . (is_dir(__DIR__ . '/uploads') ? \"✅ Mevcut\" : \"❌ Yok\") . \"<br>\";\r\n    echo \"Uploads yazılabilir: \" . (is_writable(__DIR__ . '/uploads') ? \"✅ Evet\" : \"❌ Hayır\") . \"<br>\";\r\n    \r\n    // 2. Veritabanı bağlantı testi\r\n    echo \"<h3>2. Veritabanı Bağlantı Testi</h3>\";\r\n    $connection = getDatabaseConnection();\r\n    echo \"✅ Veritabanı bağlantısı başarılı<br>\";\r\n    \r\n    // 3. Tablo kontrolleri\r\n    echo \"<h3>3. Tablo Kontrolleri</h3>\";\r\n    $tables = ['iris_data', 'primebaz_data', 'bayi_hakedis_prim_donem', 'bayi_tanimlama', 'users'];\r\n    foreach ($tables as $table) {\r\n        $stmt = $connection->prepare(\"SELECT COUNT(*) as count FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = ?\");\r\n        $stmt->execute([$table]);\r\n        $result = $stmt->fetch();\r\n        echo \"Tablo $table: \" . ($result['count'] > 0 ? \"✅ Mevcut\" : \"❌ Yok\") . \"<br>\";\r\n    }\r\n    \r\n    // 4. PHP ayarları kontrol\r\n    echo \"<h3>4. PHP Ayarları</h3>\";\r\n    echo \"Upload max size: \" . ini_get('upload_max_filesize') . \"<br>\";\r\n    echo \"Post max size: \" . ini_get('post_max_size') . \"<br>\";\r\n    echo \"Memory limit: \" . ini_get('memory_limit') . \"<br>\";\r\n    echo \"Max execution time: \" . ini_get('max_execution_time') . \"<br>\";\r\n    \r\n    echo \"<hr>\";\r\n    echo \"<p style='color: green;'><strong>✅ Sistem genel olarak sağlıklı görünüyor!</strong></p>\";\r\n    \r\n} catch (Exception $e) {\r\n    echo \"<p style='color: red;'><strong>❌ Hata:</strong> \" . $e->getMessage() . \"</p>\";\r\n}\r\n?>"
+        }
+    ]
+}

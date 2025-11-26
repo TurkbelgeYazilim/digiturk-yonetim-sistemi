@@ -1,0 +1,18 @@
+{
+    "sourceFile": "sql_scripts/create_bayi_hakedis_prim_donem_table.sql",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1759394667448,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1759394667448,
+            "name": "Commit-0",
+            "content": "-- Bayi Hakedis Prim Dönem Tablosu Oluşturma Script\r\n-- Bu script digiturk veritabanında bayi_hakedis_prim_donem tablosunu oluşturur\r\n\r\nUSE digiturk;\r\nGO\r\n\r\n-- Eğer tablo varsa sil (dikkatli kullanın!)\r\n-- DROP TABLE IF EXISTS bayi_hakedis_prim_donem;\r\n\r\n-- Tablo oluştur\r\nCREATE TABLE bayi_hakedis_prim_donem (\r\n    id int IDENTITY(1,1) PRIMARY KEY,\r\n    donem_adi nvarchar(255) NOT NULL,\r\n    baslangic_tarihi date NOT NULL,\r\n    bitis_tarihi date NOT NULL,\r\n    durum nvarchar(50) NOT NULL DEFAULT 'AKTIF',\r\n    olusturma_tarihi datetime2 NOT NULL DEFAULT GETDATE(),\r\n    olusturan int NULL,\r\n    guncelleme_tarihi datetime2 NULL,\r\n    guncelleyen int NULL,\r\n    \r\n    -- Constraints\r\n    CONSTRAINT CK_bayi_hakedis_prim_donem_durum CHECK (durum IN ('AKTIF', 'PASIF')),\r\n    CONSTRAINT CK_bayi_hakedis_prim_donem_tarih CHECK (bitis_tarihi > baslangic_tarihi),\r\n    CONSTRAINT UQ_bayi_hakedis_prim_donem_adi UNIQUE (donem_adi),\r\n    \r\n    -- Foreign Key Constraints (users tablosuna referans)\r\n    CONSTRAINT FK_bayi_hakedis_prim_donem_olusturan FOREIGN KEY (olusturan) REFERENCES users(id),\r\n    CONSTRAINT FK_bayi_hakedis_prim_donem_guncelleyen FOREIGN KEY (guncelleyen) REFERENCES users(id)\r\n);\r\nGO\r\n\r\n-- Index'ler oluştur\r\nCREATE INDEX IX_bayi_hakedis_prim_donem_durum ON bayi_hakedis_prim_donem(durum);\r\nCREATE INDEX IX_bayi_hakedis_prim_donem_tarih ON bayi_hakedis_prim_donem(baslangic_tarihi, bitis_tarihi);\r\nCREATE INDEX IX_bayi_hakedis_prim_donem_olusturma ON bayi_hakedis_prim_donem(olusturma_tarihi);\r\nGO\r\n\r\n-- Örnek veri ekle (isteğe bağlı)\r\nINSERT INTO bayi_hakedis_prim_donem (donem_adi, baslangic_tarihi, bitis_tarihi, durum, olusturan)\r\nVALUES \r\n    ('2025 1. Dönem', '2025-01-01', '2025-06-30', 'AKTIF', 1),\r\n    ('2025 2. Dönem', '2025-07-01', '2025-12-31', 'PASIF', 1),\r\n    ('2024 4. Çeyrek', '2024-10-01', '2024-12-31', 'AKTIF', 1);\r\nGO\r\n\r\n-- Tablo bilgilerini göster\r\nSELECT \r\n    'Tablo başarıyla oluşturuldu' as Mesaj,\r\n    COUNT(*) as 'Kayıt Sayısı'\r\nFROM bayi_hakedis_prim_donem;\r\nGO\r\n\r\n-- Tablo yapısını göster\r\nSELECT \r\n    COLUMN_NAME as 'Sütun Adı',\r\n    DATA_TYPE as 'Veri Tipi',\r\n    IS_NULLABLE as 'Null Olabilir',\r\n    COLUMN_DEFAULT as 'Varsayılan Değer'\r\nFROM INFORMATION_SCHEMA.COLUMNS \r\nWHERE TABLE_NAME = 'bayi_hakedis_prim_donem'\r\nORDER BY ORDINAL_POSITION;\r\nGO"
+        }
+    ]
+}

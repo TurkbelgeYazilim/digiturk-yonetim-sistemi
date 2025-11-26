@@ -1,0 +1,18 @@
+{
+    "sourceFile": "debug_bayi.php",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1759333257158,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1759333257158,
+            "name": "Commit-0",
+            "content": "<?php\r\n// Enable error reporting for debugging\r\nini_set('display_errors', 1);\r\nini_set('display_startup_errors', 1);\r\nerror_reporting(E_ALL);\r\n\r\necho \"Debug başlıyor...<br>\";\r\n\r\ntry {\r\n    echo \"1. Session başlatılıyor...<br>\";\r\n    if (session_status() == PHP_SESSION_NONE) {\r\n        session_start();\r\n    }\r\n    echo \"Session durumu: \" . session_status() . \"<br>\";\r\n    \r\n    echo \"2. Auth dosyası kontrol ediliyor...<br>\";\r\n    if (file_exists('auth.php')) {\r\n        echo \"auth.php dosyası mevcut.<br>\";\r\n        require_once 'auth.php';\r\n        echo \"auth.php başarıyla yüklendi.<br>\";\r\n    } else {\r\n        echo \"auth.php dosyası bulunamadı!<br>\";\r\n    }\r\n    \r\n    echo \"3. Veritabanı bağlantısı test ediliyor...<br>\";\r\n    $configFile = __DIR__ . '/config/mssql.php';\r\n    \r\n    if (!file_exists($configFile)) {\r\n        throw new Exception('Veritabanı konfigürasyon dosyası bulunamadı: ' . $configFile);\r\n    }\r\n    echo \"Config dosyası mevcut.<br>\";\r\n    \r\n    $config = include $configFile;\r\n    echo \"Config yüklendi. Host: \" . $config['host'] . \", Database: \" . $config['database'] . \"<br>\";\r\n    \r\n    $dsn = \"sqlsrv:Server={$config['host']};Database={$config['database']};TrustServerCertificate=yes\";\r\n    echo \"DSN: \" . $dsn . \"<br>\";\r\n    \r\n    $connection = new PDO($dsn, $config['username'], $config['password'], [\r\n        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,\r\n        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,\r\n        PDO::SQLSRV_ATTR_ENCODING => PDO::SQLSRV_ENCODING_UTF8,\r\n        PDO::ATTR_EMULATE_PREPARES => false\r\n    ]);\r\n    \r\n    echo \"4. Veritabanı bağlantısı başarılı!<br>\";\r\n    \r\n    // Test sorgusu\r\n    $stmt = $connection->prepare(\"SELECT COUNT(*) as count FROM users\");\r\n    $stmt->execute();\r\n    $result = $stmt->fetch();\r\n    echo \"Kullanıcı sayısı: \" . $result['count'] . \"<br>\";\r\n    \r\n    // users_bayi tablosu kontrolü\r\n    $stmt = $connection->prepare(\"SELECT COUNT(*) as count FROM users_bayi\");\r\n    $stmt->execute();\r\n    $result = $stmt->fetch();\r\n    echo \"Bayi sayısı: \" . $result['count'] . \"<br>\";\r\n    \r\n    echo \"5. Tüm testler başarılı!<br>\";\r\n    \r\n} catch (Exception $e) {\r\n    echo \"<strong>HATA:</strong> \" . $e->getMessage() . \"<br>\";\r\n    echo \"<strong>Stack Trace:</strong><br>\";\r\n    echo nl2br($e->getTraceAsString());\r\n}\r\n\r\necho \"<br><hr><br>\";\r\necho \"PHP Bilgileri:<br>\";\r\necho \"PHP Version: \" . phpversion() . \"<br>\";\r\necho \"Extensions: \";\r\nif (extension_loaded('pdo_sqlsrv')) {\r\n    echo \"pdo_sqlsrv (OK) \";\r\n} else {\r\n    echo \"pdo_sqlsrv (YOK!) \";\r\n}\r\nif (extension_loaded('sqlsrv')) {\r\n    echo \"sqlsrv (OK) \";\r\n} else {\r\n    echo \"sqlsrv (YOK!) \";\r\n}\r\n\r\necho \"<br><br>\";\r\necho '<a href=\"bayi_tanimlama.php\">Bayi Tanımlama Sayfasına Git</a><br>';\r\necho '<a href=\"index.php\">Ana Sayfaya Git</a>';\r\n?>"
+        }
+    ]
+}

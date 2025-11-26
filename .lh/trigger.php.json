@@ -1,0 +1,18 @@
+{
+    "sourceFile": "trigger.php",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1759561113034,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1759561113034,
+            "name": "Commit-0",
+            "content": "<?php\r\n// Simple trigger script\r\n$ch = curl_init();\r\ncurl_setopt($ch, CURLOPT_URL, \"http://digiturk.ilekasoft.com/bayi_hakedis_tanimla.php\");\r\ncurl_setopt($ch, CURLOPT_RETURNTRANSFER, true);\r\ncurl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);\r\n$response = curl_exec($ch);\r\ncurl_close($ch);\r\necho \"Page triggered, check debug.log\\n\";\r\n?>"
+        }
+    ]
+}

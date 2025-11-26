@@ -1,0 +1,18 @@
+{
+    "sourceFile": "test_minimal.php",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1759332348257,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1759332348257,
+            "name": "Commit-0",
+            "content": "<?php\r\n// Minimal test version - Test if basic PHP functionality works\r\necho \"<!DOCTYPE html>\";\r\necho \"<html lang='tr'>\";\r\necho \"<head><meta charset='UTF-8'><title>Test Iris</title></head>\";\r\necho \"<body>\";\r\necho \"<h1>Test Sayfası</h1>\";\r\n\r\n// Test session\r\nif (session_status() == PHP_SESSION_NONE) {\r\n    session_start();\r\n}\r\necho \"<p>✓ Session başlatıldı</p>\";\r\n\r\n// Test database config\r\ntry {\r\n    $configFile = __DIR__ . '/config/mssql.php';\r\n    if (file_exists($configFile)) {\r\n        $config = include $configFile;\r\n        echo \"<p>✓ Database config yüklendi</p>\";\r\n    } else {\r\n        echo \"<p>✗ Database config bulunamadı</p>\";\r\n    }\r\n} catch (Exception $e) {\r\n    echo \"<p>✗ Config hatası: \" . htmlspecialchars($e->getMessage()) . \"</p>\";\r\n}\r\n\r\n// Test auth inclusion\r\ntry {\r\n    if (file_exists('auth.php')) {\r\n        echo \"<p>✓ auth.php dosyası var</p>\";\r\n        // Don't actually include it to avoid redirect\r\n    } else {\r\n        echo \"<p>✗ auth.php dosyası yok</p>\";\r\n    }\r\n} catch (Exception $e) {\r\n    echo \"<p>✗ Auth hatası: \" . htmlspecialchars($e->getMessage()) . \"</p>\";\r\n}\r\n\r\n// Test includes\r\nif (file_exists('includes/header.php')) {\r\n    echo \"<p>✓ includes/header.php var</p>\";\r\n} else {\r\n    echo \"<p>✗ includes/header.php yok</p>\";\r\n}\r\n\r\nif (file_exists('includes/footer.php')) {\r\n    echo \"<p>✓ includes/footer.php var</p>\";\r\n} else {\r\n    echo \"<p>✗ includes/footer.php yok</p>\";\r\n}\r\n\r\necho \"<h2>PHP Bilgileri</h2>\";\r\necho \"<p>PHP Version: \" . phpversion() . \"</p>\";\r\necho \"<p>Server: \" . $_SERVER['SERVER_SOFTWARE'] . \"</p>\";\r\necho \"<p>Document Root: \" . $_SERVER['DOCUMENT_ROOT'] . \"</p>\";\r\necho \"<p>Script Name: \" . $_SERVER['SCRIPT_NAME'] . \"</p>\";\r\n\r\necho \"<h2>Loaded Extensions</h2>\";\r\n$extensions = get_loaded_extensions();\r\nif (in_array('pdo_sqlsrv', $extensions)) {\r\n    echo \"<p>✓ pdo_sqlsrv extension yüklü</p>\";\r\n} else {\r\n    echo \"<p>✗ pdo_sqlsrv extension yüklü değil</p>\";\r\n}\r\n\r\nif (in_array('sqlsrv', $extensions)) {\r\n    echo \"<p>✓ sqlsrv extension yüklü</p>\";\r\n} else {\r\n    echo \"<p>✗ sqlsrv extension yüklü değil</p>\";\r\n}\r\n\r\necho \"</body></html>\";\r\n?>"
+        }
+    ]
+}
