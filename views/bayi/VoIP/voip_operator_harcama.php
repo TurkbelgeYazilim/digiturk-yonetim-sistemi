@@ -72,8 +72,16 @@ $breadcrumbs = [
     ['title' => 'VoIP Numara Harcamalar']
 ];
 
-$message = '';
-$messageType = '';
+// Session'dan mesaj al (varsa)
+if (isset($_SESSION['message'])) {
+    $message = $_SESSION['message'];
+    $messageType = $_SESSION['messageType'] ?? 'info';
+    unset($_SESSION['message']);
+    unset($_SESSION['messageType']);
+} else {
+    $message = '';
+    $messageType = '';
+}
 
 // VoIP Harcama işlemleri
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -83,12 +91,213 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = $_POST['action'] ?? '';
         
         switch ($action) {
+            case 'bulk_add':
+                if ($sayfaYetkileri['ekle'] != 1) {
+                    throw new Exception('Toplu ekleme yetkiniz bulunmamaktadır.');
+                }
+                
+                $bulkTarih = $_POST['bulk_tarih'];
+                $bulkData = trim($_POST['bulk_data']);
+                
+                if (empty($bulkData)) {
+                    throw new Exception('Lütfen eklenecek verileri giriniz.');
+                }
+                
+                // Satırları ayır
+                $lines = explode("\n", $bulkData);
+                $processedCount = 0;
+                $errorCount = 0;
+                $errors = [];
+                
+                // VoIP numaralarını önce al (hızlı arama için)
+                $voipNumMap = [];
+                $voipSql = "SELECT voip_operator_numara_id, voip_operator_numara_VoIPNo FROM voip_operator_numara";
+                $voipStmt = $conn->prepare($voipSql);
+                $voipStmt->execute();
+                while ($row = $voipStmt->fetch(PDO::FETCH_ASSOC)) {
+                    $voipNumMap[trim($row['voip_operator_numara_VoIPNo'])] = $row['voip_operator_numara_id'];
+                }
+                
+                foreach ($lines as $lineIndex => $line) {
+                    $line = trim($line);
+                    if (empty($line)) {
+                        continue; // Boş satırları atla
+                    }
+                    
+                    $rowNumber = $lineIndex + 1;
+                    
+                    // Tab veya birden fazla boşlukla ayrılmış olabilir
+                    $parts = preg_split('/\t+|\s{2,}/', $line);
+                    
+                    if (count($parts) < 4) {
+                        $errors[] = "Satır $rowNumber: Eksik sütun (en az 4 sütun gerekli: Numara, Adet, Süre, Ücret)";
+                        $errorCount++;
+                        continue;
+                    }
+                    
+                    $numara = trim($parts[0]);
+                    
+                    // Başlık satırını atla (Numara, Number, No vs.)
+                    if (preg_match('/^(numara|number|no|telefon|voip)/i', $numara)) {
+                        continue;
+                    }
+                    
+                    // Adet ve Süre: virgül ve noktaları temizle (5,463 -> 5463)
+                    $adet = !empty($parts[1]) ? (int)str_replace([',', '.'], '', trim($parts[1])) : null;
+                    $sureRaw = trim($parts[2]);
+                    
+                    // Ücret: virgülü nokta ile değiştir (7,942 -> 7942.00 veya 7.942 -> 7942.00)
+                    $ucretRaw = trim($parts[3]);
+                    // Eğer hem nokta hem virgül varsa: 1.234,56 formatı (Avrupa) -> 1234.56
+                    if (strpos($ucretRaw, '.') !== false && strpos($ucretRaw, ',') !== false) {
+                        // 1.234,56 veya 1,234.56 formatı
+                        if (strrpos($ucretRaw, ',') > strrpos($ucretRaw, '.')) {
+                            // Virgül en sonda -> Avrupa formatı (1.234,56)
+                            $ucret = (float)str_replace(['.', ','], ['', '.'], $ucretRaw);
+                        } else {
+                            // Nokta en sonda -> ABD formatı (1,234.56)
+                            $ucret = (float)str_replace(',', '', $ucretRaw);
+                        }
+                    } elseif (strpos($ucretRaw, ',') !== false) {
+                        // Sadece virgül var: binlik ayracı olabilir (7,942 -> 7942)
+                        $ucret = (float)str_replace(',', '', $ucretRaw);
+                    } elseif (strpos($ucretRaw, '.') !== false) {
+                        // Sadece nokta var: binlik ayracı olabilir (7.942 -> 7942)
+                        $ucret = (float)str_replace('.', '', $ucretRaw);
+                    } else {
+                        // Hiç ayraç yok
+                        $ucret = (float)$ucretRaw;
+                    }
+                    
+                    // Numara formatını temizle (sadece rakamlar)
+                    $cleanNumara = preg_replace('/[^0-9]/', '', $numara);
+                    
+                    // Numara boş veya çok kısa ise atla
+                    if (empty($cleanNumara) || strlen($cleanNumara) < 10) {
+                        $errors[] = "Satır $rowNumber: Geçersiz numara formatı: '$numara'";
+                        $errorCount++;
+                        continue;
+                    }
+                    
+                    // VoIP numara ID'sini bul (hem 90'lı hem 90'sız dene)
+                    $voipNumaraId = null;
+                    $searchVariants = [
+                        $cleanNumara,              // Orjinal numara
+                        '90' . $cleanNumara,       // 90 eklenmiş hali
+                        ltrim($cleanNumara, '90'), // 90 çıkarılmış hali
+                        $numara                    // Format değiştirilmemiş hali
+                    ];
+                    
+                    foreach ($searchVariants as $variant) {
+                        if (!empty($variant) && isset($voipNumMap[$variant])) {
+                            $voipNumaraId = $voipNumMap[$variant];
+                            break;
+                        }
+                    }
+                    
+                    if (!$voipNumaraId) {
+                        $errors[] = "Satır $rowNumber: VoIP numara bulunamadı: '$numara' (denenen: $cleanNumara, 90$cleanNumara)";
+                        $errorCount++;
+                        continue;
+                    }
+                    
+                    // Süreyi formatla (dakika cinsinden geliyorsa hh:mm formatına çevir)
+                    $durationStr = null;
+                    if ($sureRaw) {
+                        // Virgül veya noktayı temizle (29,139 -> 29139 dakika)
+                        $sureClean = str_replace([',', '.'], '', $sureRaw);
+                        if (is_numeric($sureClean)) {
+                            $minutes = (int)$sureClean;
+                            $hours = floor($minutes / 60);
+                            $mins = $minutes % 60;
+                            $durationStr = sprintf('%02d:%02d', $hours, $mins);
+                        } else {
+                            $durationStr = $sureRaw;
+                        }
+                    }
+                    
+                    // Tarihi formatla
+                    $formattedDate = $bulkTarih . ' 00:00:00';
+                    
+                    // Aynı numara ve aynı tarihteki mevcut kaydı kontrol et
+                    $checkSql = "SELECT voip_operator_Harcama_id FROM voip_operator_Harcama 
+                                 WHERE voip_operator_numara_id = ? 
+                                 AND CAST(voip_operator_Harcama_Tarih AS DATE) = CAST(? AS DATE)";
+                    $checkStmt = $conn->prepare($checkSql);
+                    $checkStmt->execute([$voipNumaraId, $formattedDate]);
+                    $existingRecord = $checkStmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($existingRecord) {
+                        // Mevcut kayıt varsa güncelle
+                        $updateSql = "UPDATE voip_operator_Harcama SET 
+                                      voip_operator_Harcama_CagriSayisi = ?, 
+                                      voip_operator_Harcama_Sure = ?, 
+                                      voip_operator_Harcama_Ucret = ? 
+                                      WHERE voip_operator_Harcama_id = ?";
+                        $updateStmt = $conn->prepare($updateSql);
+                        
+                        if ($updateStmt->execute([$adet, $durationStr, $ucret, $existingRecord['voip_operator_Harcama_id']])) {
+                            $processedCount++;
+                        } else {
+                            $errors[] = "Satır $rowNumber: Güncelleme hatası";
+                            $errorCount++;
+                        }
+                    } else {
+                        // Yeni kayıt ekle
+                        $insertSql = "INSERT INTO voip_operator_Harcama 
+                                      (voip_operator_numara_id, voip_operator_Harcama_CagriSayisi, voip_operator_Harcama_Sure, 
+                                       voip_operator_Harcama_Tarih, voip_operator_Harcama_Ucret) 
+                                      VALUES (?, ?, ?, ?, ?)";
+                        $insertStmt = $conn->prepare($insertSql);
+                        
+                        if ($insertStmt->execute([$voipNumaraId, $adet, $durationStr, $formattedDate, $ucret])) {
+                            $processedCount++;
+                        } else {
+                            $errors[] = "Satır $rowNumber: Veritabanı hatası";
+                            $errorCount++;
+                        }
+                    }
+                }
+                
+                if ($processedCount > 0) {
+                    $message = "Panodan toplu ekleme başarıyla tamamlandı. $processedCount kayıt işlendi (eklendi/güncellendi).";
+                    if ($errorCount > 0) {
+                        $message .= " $errorCount kayıtta hata oluştu.";
+                    }
+                    $messageType = 'success';
+                } else {
+                    $message = 'Hiçbir kayıt işlenemedi. Lütfen veri formatını kontrol edin.';
+                    $messageType = 'warning';
+                }
+                
+                if (!empty($errors)) {
+                    $message .= '<br><small>Hatalar: ' . implode(', ', array_slice($errors, 0, 10)) . '</small>';
+                }
+                break;
+                
             case 'upload_excel':
                 if ($sayfaYetkileri['ekle'] != 1) {
                     throw new Exception('Excel yükleme yetkiniz bulunmamaktadır.');
                 }
-                if (!isset($_FILES['excel_file']) || $_FILES['excel_file']['error'] !== UPLOAD_ERR_OK) {
-                    throw new Exception('Excel dosyası yükleme hatası.');
+                
+                // Dosya yükleme hatalarını detaylı kontrol et
+                if (!isset($_FILES['excel_file'])) {
+                    throw new Exception('Excel dosyası gönderilmedi.');
+                }
+                
+                $fileError = $_FILES['excel_file']['error'];
+                if ($fileError !== UPLOAD_ERR_OK) {
+                    $errorMessages = [
+                        UPLOAD_ERR_INI_SIZE => 'Dosya boyutu php.ini dosyasındaki upload_max_filesize değerini aşıyor.',
+                        UPLOAD_ERR_FORM_SIZE => 'Dosya boyutu HTML formundaki MAX_FILE_SIZE değerini aşıyor.',
+                        UPLOAD_ERR_PARTIAL => 'Dosya sadece kısmen yüklendi.',
+                        UPLOAD_ERR_NO_FILE => 'Hiçbir dosya yüklenmedi.',
+                        UPLOAD_ERR_NO_TMP_DIR => 'Geçici klasör bulunamadı.',
+                        UPLOAD_ERR_CANT_WRITE => 'Dosya diske yazılamadı.',
+                        UPLOAD_ERR_EXTENSION => 'Bir PHP eklentisi dosya yüklemeyi durdurdu.'
+                    ];
+                    $errorMsg = $errorMessages[$fileError] ?? 'Bilinmeyen dosya yükleme hatası (kod: ' . $fileError . ')';
+                    throw new Exception('Excel dosyası yükleme hatası: ' . $errorMsg);
                 }
                 
                 $excelTarih = $_POST['excel_tarih'];
@@ -97,27 +306,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Dosya uzantısını kontrol et
                 $fileName = $_FILES['excel_file']['name'];
                 $fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-                if (!in_array($fileExtension, ['xlsx', 'xls'])) {
-                    throw new Exception('Sadece .xlsx ve .xls dosyaları kabul edilir.');
+                if (!in_array($fileExtension, ['xlsx', 'xls', 'csv'])) {
+                    throw new Exception('Sadece .xlsx, .xls ve .csv dosyaları kabul edilir.');
                 }
                 
-                // Dosyayı geçici klasöre taşı
-                $uploadDir = 'uploads/';
-                if (!is_dir($uploadDir)) {
-                    mkdir($uploadDir, 0777, true);
+                // Dosyayı geçici klasöre taşı (temp klasörü)
+                $uploadDir = realpath(__DIR__ . '/../../../temp');
+                
+                if ($uploadDir === false) {
+                    // Klasör yoksa oluştur
+                    $uploadDir = __DIR__ . '/../../../temp';
+                    if (!mkdir($uploadDir, 0777, true)) {
+                        throw new Exception('Temp klasörü oluşturulamadı: ' . $uploadDir);
+                    }
+                    $uploadDir = realpath($uploadDir);
                 }
                 
-                $uploadFile = $uploadDir . 'temp_excel_' . time() . '.' . $fileExtension;
-                if (!move_uploaded_file($_FILES['excel_file']['tmp_name'], $uploadFile)) {
-                    throw new Exception('Dosya yükleme hatası.');
+                // Sondaki slash'i ekle
+                $uploadDir = rtrim($uploadDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+                
+                if (!is_writable($uploadDir)) {
+                    throw new Exception('Temp klasörüne yazma izni yok: ' . $uploadDir);
+                }
+                
+                $uploadFile = $uploadDir . 'voip_harcama_' . time() . '.' . $fileExtension;
+                $tempFile = $_FILES['excel_file']['tmp_name'];
+                
+                if (!file_exists($tempFile)) {
+                    throw new Exception('Geçici dosya bulunamadı.');
+                }
+                
+                if (!move_uploaded_file($tempFile, $uploadFile)) {
+                    throw new Exception('Dosya taşıma hatası. Kaynak: ' . $tempFile . ' Hedef: ' . $uploadFile);
                 }
                 
                 try {
-                    // SimpleXLSX kütüphanesini kullan (PhpSpreadsheet alternatifi)
-                    require_once 'includes/SimpleXLSX.php';
+                    $rows = [];
                     
-                    if ($xlsx = SimpleXLSX::parse($uploadFile)) {
-                        $rows = $xlsx->rows();
+                    // CSV mi Excel mi kontrol et
+                    if ($fileExtension === 'csv') {
+                        // CSV dosyasını oku
+                        if (($handle = fopen($uploadFile, 'r')) !== false) {
+                            while (($data = fgetcsv($handle, 10000, ',')) !== false) {
+                                $rows[] = $data;
+                            }
+                            fclose($handle);
+                        } else {
+                            throw new Exception('CSV dosyası açılamadı.');
+                        }
+                    } else {
+                        // SimpleXLSX kütüphanesini kullan
+                        $simpleXLSXPath = realpath(__DIR__ . '/../../../includes/SimpleXLSX.php');
+                        if ($simpleXLSXPath === false || !file_exists($simpleXLSXPath)) {
+                            throw new Exception('SimpleXLSX kütüphanesi bulunamadı: ' . __DIR__ . '/../../../includes/SimpleXLSX.php');
+                        }
+                        require_once $simpleXLSXPath;
+                        
+                        if (!class_exists('SimpleXLSX')) {
+                            throw new Exception('SimpleXLSX sınıfı yüklenemedi.');
+                        }
+                        
+                        if ($xlsx = SimpleXLSX::parse($uploadFile)) {
+                            $rows = $xlsx->rows();
+                        } else {
+                            throw new Exception('Excel dosyası okunamadı: ' . SimpleXLSX::parseError());
+                        }
+                    }
+                    
+                    if (!empty($rows)) {
                         $processedCount = 0;
                         $errorCount = 0;
                         $errors = [];
@@ -279,7 +535,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         
                     } else {
                         unlink($uploadFile);
-                        throw new Exception('Excel dosyası okunamadı: ' . SimpleXLSX::parseError());
+                        throw new Exception('Dosya okunamadı veya boş.');
                     }
                     
                 } catch (Exception $e) {
@@ -384,9 +640,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $messageType = 'success';
                 break;
         }
+        
+        // İşlem başarılı, mesajı session'a kaydet ve yönlendir
+        $_SESSION['message'] = $message;
+        $_SESSION['messageType'] = $messageType;
+        header('Location: ' . $_SERVER['PHP_SELF']);
+        exit;
+        
     } catch (Exception $e) {
         $message = 'Hata: ' . $e->getMessage();
         $messageType = 'danger';
+        
+        // Hatayı logla
+        error_log('VoIP Harcama Hatası [' . $action . ']: ' . $e->getMessage());
+        error_log('Stack trace: ' . $e->getTraceAsString());
+        
+        // Hata durumunda da session'a kaydet ve yönlendir
+        $_SESSION['message'] = $message;
+        $_SESSION['messageType'] = $messageType;
+        header('Location: ' . $_SERVER['PHP_SELF']);
+        exit;
     }
 }
 
@@ -409,9 +682,24 @@ try {
 
 // Filtreleme parametrelerini al
 $filterNumara = $_GET['filter_numara'] ?? '';
+$filterOperator = $_GET['filter_operator'] ?? '';
 $filterTarihBaslangic = $_GET['filter_tarih_baslangic'] ?? '';
 $filterTarihBitis = $_GET['filter_tarih_bitis'] ?? '';
 $filterAltBayi = $_GET['filter_alt_bayi'] ?? '';
+
+// VoIP Operatör listesini al (filtreleme için)
+$voipOperatorler = [];
+try {
+    $operatorSql = "SELECT voip_operator_id, voip_operator_adi 
+                    FROM voip_operator_tanim 
+                    WHERE voip_operator_durum = 1 
+                    ORDER BY voip_operator_adi";
+    $operatorStmt = $conn->prepare($operatorSql);
+    $operatorStmt->execute();
+    $voipOperatorler = $operatorStmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    $voipOperatorler = [];
+}
 
 // Alt Bayi listesini al (filtreleme için)
 $altBayilar = [];
@@ -443,6 +731,11 @@ try {
         $params[] = $currentUser['id'];
         // Filtreyi de otomatik olarak ayarla
         $filterAltBayi = $currentUser['id'];
+    }
+    
+    if ($filterOperator) {
+        $whereConditions[] = "o.voip_operator_id = ?";
+        $params[] = $filterOperator;
     }
     
     if ($filterNumara) {
@@ -521,16 +814,22 @@ include '../../../includes/header.php';
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2><i class="fas fa-dollar-sign me-2"></i>VoIP Numara Harcamalar</h2>
-                <?php if ($sayfaYetkileri['ekle'] == 1): ?>
                 <div class="btn-group" role="group">
+                    <button class="btn btn-success" onclick="exportToExcel()">
+                        <i class="fas fa-file-excel me-1"></i>Excel İndir
+                    </button>
+                    <?php if ($sayfaYetkileri['ekle'] == 1): ?>
                     <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#uploadExcelModal">
-                        <i class="fas fa-file-excel me-1"></i>Excel Yükle
+                        <i class="fas fa-file-import me-1"></i>Dosya Yükle (Excel/CSV)
+                    </button>
+                    <button class="btn btn-info" data-bs-toggle="modal" data-bs-target="#bulkAddModal">
+                        <i class="fas fa-clipboard me-1"></i>Panodan Ekle
                     </button>
                     <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addHarcamaModal">
                         <i class="fas fa-plus me-1"></i>Yeni Harcama
                     </button>
+                    <?php endif; ?>
                 </div>
-                <?php endif; ?>
             </div>
         </div>
     </div>
@@ -591,7 +890,7 @@ include '../../../includes/header.php';
                         <i class="fas fa-lira-sign fa-2x mb-2"></i>
                     </div>
                     <h5 class="card-title">Toplam Ücret</h5>
-                    <h3 class="text-success"><?php echo number_format($istatistikler['toplam_ucret'], 2); ?> ₺</h3>
+                    <h3 class="text-success"><?php echo number_format($istatistikler['toplam_ucret'], 2, ',', '.'); ?> ₺</h3>
                 </div>
             </div>
         </div>
@@ -607,6 +906,17 @@ include '../../../includes/header.php';
         </div>
         <div class="card-body">
             <form method="GET" class="row g-3">
+                <div class="col-md-2">
+                    <label class="form-label">VoIP Operatör</label>
+                    <select name="filter_operator" class="form-select select2-search">
+                        <option value="">Tümü</option>
+                        <?php foreach ($voipOperatorler as $operator): ?>
+                            <option value="<?php echo $operator['voip_operator_id']; ?>" <?php echo $filterOperator == $operator['voip_operator_id'] ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($operator['voip_operator_adi']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
                 <div class="col-md-3">
                     <label class="form-label">VoIP Numara</label>
                     <select name="filter_numara" class="form-select select2-search">
@@ -648,15 +958,14 @@ include '../../../includes/header.php';
                         </button>
                     </div>
                 </div>
-                <div class="col-md-1">
-                    <label class="form-label">&nbsp;</label>
-                    <div class="d-grid">
-                        <a href="voip_operator_harcama.php" class="btn btn-outline-secondary">
-                            <i class="fas fa-times"></i>
-                        </a>
-                    </div>
-                </div>
             </form>
+            <div class="row mt-2">
+                <div class="col-md-12">
+                    <a href="voip_operator_harcama.php" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-times me-1"></i>Filtreleri Temizle
+                    </a>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -715,7 +1024,7 @@ include '../../../includes/header.php';
                                         <?php echo $harcama['voip_operator_Harcama_Tarih'] ? date('d.m.Y H:i', strtotime($harcama['voip_operator_Harcama_Tarih'])) : '-'; ?>
                                     </td>
                                     <td>
-                                        <strong class="text-success"><?php echo number_format($harcama['voip_operator_Harcama_Ucret'], 2); ?></strong>
+                                        <strong class="text-success"><?php echo number_format($harcama['voip_operator_Harcama_Ucret'], 2, ',', '.'); ?></strong>
                                     </td>
                                     <td>
                                         <div class="btn-group" role="group">
@@ -751,13 +1060,93 @@ include '../../../includes/header.php';
     </div>
 </div>
 
+<!-- Panodan Toplu Ekleme Modal -->
+<div class="modal fade" id="bulkAddModal" tabindex="-1" aria-labelledby="bulkAddModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="bulkAddModalLabel">
+                    <i class="fas fa-clipboard me-2"></i>Panodan Toplu Ekleme
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST">
+                <div class="modal-body">
+                    <input type="hidden" name="action" value="bulk_add">
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Kullanım:</strong> Excel'den veya başka yerden kopyaladığınız verileri aşağıdaki alana yapıştırın.<br>
+                        <strong>Format:</strong> Her satırda <code>Numara [TAB] Adet [TAB] Süre [TAB] Ücret</code> şeklinde olmalı.<br>
+                        <small class="text-muted">
+                            <strong>Örnek:</strong><br>
+                            3125616023&nbsp;&nbsp;&nbsp;&nbsp;5463&nbsp;&nbsp;&nbsp;&nbsp;525&nbsp;&nbsp;&nbsp;&nbsp;135<br>
+                            3125616024&nbsp;&nbsp;&nbsp;&nbsp;466&nbsp;&nbsp;&nbsp;&nbsp;984&nbsp;&nbsp;&nbsp;&nbsp;238<br>
+                            3125616027&nbsp;&nbsp;&nbsp;&nbsp;450534&nbsp;&nbsp;&nbsp;&nbsp;29139&nbsp;&nbsp;&nbsp;&nbsp;7942
+                        </small>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="bulk_tarih" class="form-label">Harcama Tarihi (Gün) <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="bulk_tarih" name="bulk_tarih" required>
+                            <div class="form-text">
+                                <i class="fas fa-info-circle text-primary"></i> 
+                                Tüm kayıtlar bu tarih ile kaydedilecek. Aynı gün + aynı numara varsa güncellenir.
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">İstatistik</label>
+                            <div class="p-2 bg-light rounded">
+                                <div class="d-flex justify-content-between">
+                                    <span>Satır Sayısı:</span>
+                                    <strong id="bulk_line_count">0</strong>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>Geçerli Satır:</span>
+                                    <strong id="bulk_valid_count" class="text-success">0</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="bulk_data" class="form-label">Veri <span class="text-danger">*</span></label>
+                        <textarea class="form-control font-monospace" id="bulk_data" name="bulk_data" rows="15" required 
+                                  placeholder="Numara    Adet    Süre (Dakika)    Ücret&#10;3125616023    5463    525    135&#10;3125616024    466    984    238&#10;3125616027    450534    29139    7942"></textarea>
+                        <div class="form-text">
+                            Excel'den kopyala-yapıştır yapabilirsiniz. TAB veya çoklu boşluk ile ayrılmış olmalı.
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Dikkat:</strong> Numara alanında sistemde kayıtlı VoIP numaraları olmalıdır. Eşleşmeyen numaralar atlanır.
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-sync-alt me-2"></i>
+                        <strong>Mükerrer Kayıt:</strong> Aynı numara ve aynı tarihte kayıt varsa otomatik güncellenir.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-info" id="bulkAddBtn">
+                        <i class="fas fa-save me-1"></i>Kaydet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Excel Yükleme Modal -->
 <div class="modal fade" id="uploadExcelModal" tabindex="-1" aria-labelledby="uploadExcelModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="uploadExcelModalLabel">
-                    <i class="fas fa-file-excel me-2"></i>VoIP Harcama Excel Dosyası Yükle
+                    <i class="fas fa-file-excel me-2"></i>VoIP Harcama Dosyası Yükle (Excel/CSV)
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -767,22 +1156,28 @@ include '../../../includes/header.php';
                     
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle me-2"></i>
-                        <strong>Excel Dosyası Formatı:</strong><br>
+                        <strong>Dosya Formatı:</strong><br>
                         Customer Name, Number of Calls, Duration (min), Billed Duration (min), Charged Amount, Cost, Currency<br>
-                        <small class="text-muted">Customer Name: "Acct. 902129221364" veya "902129221364" formatında olabilir<br>
-                        Ücret: "Cost" sütunu yoksa "Charged Amount" sütunu kullanılır</small>
+                        <small class="text-muted">
+                            • Customer Name: "Acct. 902129221364" veya "902129221364" formatında olabilir<br>
+                            • Ücret: "Cost" sütunu yoksa "Charged Amount" sütunu kullanılır<br>
+                            • Dosya adından tarih otomatik parse edilir (örn: Customer_Summary_Report_from_2025-11-25_...)
+                        </small>
                     </div>
                     
                     <div class="mb-3">
                         <label for="excel_tarih" class="form-label">Harcama Tarihi <span class="text-danger">*</span></label>
                         <input type="date" class="form-control" id="excel_tarih" name="excel_tarih" required>
-                        <div class="form-text">Yüklenen tüm kayıtlar bu tarih ile kaydedilecek</div>
+                        <div class="form-text">
+                            <i class="fas fa-info-circle text-primary"></i> 
+                            Dosya adından otomatik algılanır veya manuel seçebilirsiniz. Yüklenen tüm kayıtlar bu tarih ile kaydedilecek.
+                        </div>
                     </div>
                     
                     <div class="mb-3">
-                        <label for="excel_file" class="form-label">Excel Dosyası <span class="text-danger">*</span></label>
-                        <input type="file" class="form-control" id="excel_file" name="excel_file" accept=".xlsx,.xls" required>
-                        <div class="form-text">Sadece .xlsx ve .xls dosyaları kabul edilir</div>
+                        <label for="excel_file" class="form-label">Excel/CSV Dosyası <span class="text-danger">*</span></label>
+                        <input type="file" class="form-control" id="excel_file" name="excel_file" accept=".xlsx,.xls,.csv" required>
+                        <div class="form-text">Sadece .xlsx, .xls ve .csv dosyaları kabul edilir</div>
                     </div>
                     
                     <div class="mb-3">
@@ -1014,8 +1409,33 @@ $(document).ready(function() {
     });
 });
 
+// Panodan ekleme için satır sayacı
+function updateBulkStats() {
+    const bulkData = document.getElementById('bulk_data');
+    if (!bulkData) return;
+    
+    const text = bulkData.value.trim();
+    const lines = text.split('\n').filter(line => line.trim() !== '');
+    
+    const lineCount = lines.length;
+    let validCount = 0;
+    
+    lines.forEach(line => {
+        const parts = line.split(/\t+|\s{2,}/);
+        if (parts.length >= 4) {
+            validCount++;
+        }
+    });
+    
+    document.getElementById('bulk_line_count').textContent = lineCount;
+    document.getElementById('bulk_valid_count').textContent = validCount;
+    document.getElementById('bulk_valid_count').className = validCount === lineCount && lineCount > 0 ? 'text-success' : 'text-warning';
+}
+
 // Sayfa yüklendiğinde bugünün tarihini varsayılan olarak ayarla
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('VoIP Harcama sayfası yüklendi');
+    
     const now = new Date();
     const localISOTime = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
     document.getElementById('voip_operator_Harcama_Tarih').value = localISOTime;
@@ -1024,10 +1444,103 @@ document.addEventListener('DOMContentLoaded', function() {
     const today = now.toISOString().slice(0, 10);
     document.getElementById('excel_tarih').value = today;
     
-    // Excel upload form için loading efekti
+    // Panodan ekleme modal için de tarih ayarla
+    const bulkTarihInput = document.getElementById('bulk_tarih');
+    if (bulkTarihInput) {
+        bulkTarihInput.value = today;
+    }
+    
+    // Panodan ekleme textarea için canlı istatistik
+    const bulkDataInput = document.getElementById('bulk_data');
+    if (bulkDataInput) {
+        bulkDataInput.addEventListener('input', updateBulkStats);
+        bulkDataInput.addEventListener('paste', function() {
+            setTimeout(updateBulkStats, 100);
+        });
+    }
+    
+    console.log('Varsayılan tarihler ayarlandı');
+    
+    // Excel/CSV dosyası seçildiğinde dosya adından tarihi parse et
+    const excelFileInput = document.getElementById('excel_file');
+    const excelTarihInput = document.getElementById('excel_tarih');
+    
+    if (excelFileInput) {
+        excelFileInput.addEventListener('change', function(e) {
+            if (this.files && this.files.length > 0) {
+                const fileName = this.files[0].name;
+                console.log('Seçilen dosya:', fileName);
+                
+                // Dosya adından tarih parse et
+                // Format örnekleri:
+                // Customer_Summary_Report_from_2025-11-25_00_00_00_to_2025-11-26_00_00_00.csv
+                // Report_2025-11-25.csv
+                // data_from_2025-11-25.xlsx
+                
+                let parsedDate = null;
+                
+                // "from_YYYY-MM-DD" pattern
+                let datePattern = /from_(\d{4})-(\d{2})-(\d{2})/;
+                let match = fileName.match(datePattern);
+                
+                if (match) {
+                    parsedDate = `${match[1]}-${match[2]}-${match[3]}`;
+                } else {
+                    // Herhangi bir "YYYY-MM-DD" pattern
+                    datePattern = /(\d{4})-(\d{2})-(\d{2})/;
+                    match = fileName.match(datePattern);
+                    if (match) {
+                        parsedDate = `${match[1]}-${match[2]}-${match[3]}`;
+                    }
+                }
+                
+                if (parsedDate) {
+                    excelTarihInput.value = parsedDate;
+                    console.log('Dosya adından tarih parse edildi:', parsedDate);
+                    
+                    // Kullanıcıya bilgi ver
+                    const dateLabel = excelTarihInput.previousElementSibling;
+                    if (dateLabel) {
+                        dateLabel.innerHTML = 'Harcama Tarihi <span class="text-success"><i class="fas fa-check-circle"></i> Dosyadan otomatik</span> <span class="text-danger">*</span>';
+                        setTimeout(() => {
+                            dateLabel.innerHTML = 'Harcama Tarihi <span class="text-danger">*</span>';
+                        }, 5000);
+                    }
+                } else {
+                    console.log('Dosya adından tarih parse edilemedi, varsayılan tarih kullanılıyor');
+                }
+            }
+        });
+    }
+    
+    // Excel upload form için loading efekti ve validasyon
     const uploadForm = document.querySelector('#uploadExcelModal form');
     if (uploadForm) {
-        uploadForm.addEventListener('submit', function() {
+        uploadForm.addEventListener('submit', function(e) {
+            console.log('Excel upload form gönderiliyor...');
+            
+            // Form validasyonu
+            const excelFile = document.getElementById('excel_file');
+            const excelTarih = document.getElementById('excel_tarih');
+            
+            if (!excelFile.files || excelFile.files.length === 0) {
+                e.preventDefault();
+                console.error('Excel dosyası seçilmedi!');
+                alert('Lütfen bir Excel dosyası seçin!');
+                return false;
+            }
+            
+            if (!excelTarih.value) {
+                e.preventDefault();
+                console.error('Tarih seçilmedi!');
+                alert('Lütfen harcama tarihini seçin!');
+                return false;
+            }
+            
+            console.log('Excel dosyası:', excelFile.files[0].name);
+            console.log('Tarih:', excelTarih.value);
+            console.log('Form verileri geçerli, gönderiliyor...');
+            
             const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
             loadingModal.show();
             
@@ -1063,6 +1576,73 @@ function deleteHarcama(id, voipNo) {
     document.getElementById('deleteHarcamaId').value = id;
     document.getElementById('deleteHarcamaInfo').textContent = voipNo + ' numarası için harcama kaydı';
     new bootstrap.Modal(document.getElementById('deleteHarcamaModal')).show();
+}
+
+// Excel'e aktar
+function exportToExcel() {
+    // Tabloyu al
+    const table = document.querySelector('.table-responsive table');
+    if (!table) {
+        alert('Tablo bulunamadı!');
+        return;
+    }
+    
+    // Tablo verilerini kopyala
+    const clonedTable = table.cloneNode(true);
+    
+    // İşlemler sütununu kaldır (son sütun)
+    const headerRows = clonedTable.querySelectorAll('thead tr');
+    headerRows.forEach(row => {
+        const lastTh = row.querySelector('th:last-child');
+        if (lastTh && lastTh.textContent.trim() === 'İşlemler') {
+            lastTh.remove();
+        }
+    });
+    
+    const bodyRows = clonedTable.querySelectorAll('tbody tr');
+    bodyRows.forEach(row => {
+        const lastTd = row.querySelector('td:last-child');
+        if (lastTd) {
+            lastTd.remove();
+        }
+    });
+    
+    // HTML tablosunu Excel formatına çevir
+    let html = '<html xmlns:x="urn:schemas-microsoft-com:office:excel">';
+    html += '<head>';
+    html += '<meta charset="utf-8">';
+    html += '<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>';
+    html += '<x:Name>VoIP Harcamalar</x:Name>';
+    html += '<x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet>';
+    html += '</x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->';
+    html += '</head>';
+    html += '<body>';
+    html += '<table>';
+    html += clonedTable.innerHTML;
+    html += '</table>';
+    html += '</body>';
+    html += '</html>';
+    
+    // Dosya adı oluştur
+    const today = new Date();
+    const dateStr = today.getFullYear() + '-' + 
+                    String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+                    String(today.getDate()).padStart(2, '0');
+    const filename = 'VoIP_Harcamalar_' + dateStr + '.xls';
+    
+    // Blob oluştur ve indir
+    const blob = new Blob(['\ufeff', html], {
+        type: 'application/vnd.ms-excel'
+    });
+    
+    // İndirme linki oluştur
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+    
+    // Temizlik
+    URL.revokeObjectURL(link.href);
 }
 </script>
 

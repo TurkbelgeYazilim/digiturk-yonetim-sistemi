@@ -57,8 +57,23 @@
  * @phone +90 501 357 10 85
  */
 
+// iframe cross-origin için header ayarları (dinamik origin)
+$allowedOrigin = '*';
+if (!empty($_SERVER['HTTP_ORIGIN'])) {
+    $allowedOrigin = $_SERVER['HTTP_ORIGIN'];
+} elseif (!empty($_SERVER['HTTP_REFERER'])) {
+    $refererParts = parse_url($_SERVER['HTTP_REFERER']);
+    $allowedOrigin = ($refererParts['scheme'] ?? 'https') . '://' . ($refererParts['host'] ?? '');
+}
+header('Access-Control-Allow-Origin: ' . $allowedOrigin);
+header('Access-Control-Allow-Credentials: true');
+header('P3P: CP="CAO PSA OUR"');
+
 // Session başlat (başvuru bilgilerini saklamak için)
+// iframe içinde çalışması için SameSite=None ve Secure gerekli
 if (session_status() == PHP_SESSION_NONE) {
+    ini_set('session.cookie_samesite', 'None');
+    ini_set('session.cookie_secure', '1');
     session_start();
 }
 
@@ -302,6 +317,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             
             $insertStmt = $conn->prepare($insertSql);
             
+            // Kaynak siteyi belirle (JavaScript'ten gelen, yoksa server'dan)
+            $kaynakSite = 'digiturk.ilekasoft.com'; // Varsayılan
+            
+            // Önce JavaScript'ten gelen değeri kontrol et
+            if (!empty($_POST['kaynak_site'])) {
+                $kaynakSite = trim($_POST['kaynak_site']);
+            } 
+            // Yoksa HTTP header'lardan bak
+            elseif (!empty($_SERVER['HTTP_ORIGIN'])) {
+                $kaynakSite = parse_url($_SERVER['HTTP_ORIGIN'], PHP_URL_HOST) ?: $kaynakSite;
+            } elseif (!empty($_SERVER['HTTP_REFERER'])) {
+                $kaynakSite = parse_url($_SERVER['HTTP_REFERER'], PHP_URL_HOST) ?: $kaynakSite;
+            }
+            
             // Debug: Parametreleri logla
             $params = [
                 trim($_POST['firstName']),
@@ -318,7 +347,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $apiUserId,
                 $kampanyaId,
                 $paketId,
-                'digiturk.ilekasoft.com',
+                $kaynakSite, // Dinamik kaynak site
                 1 // Varsayılan durum: Yeni
             ];
             
@@ -399,6 +428,9 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Digiturk Başvuru Formu - Kimlik Bilgileri">
     <title>Başvuru - Kimlik Bilgileri | Digiturk</title>
+    
+    <!-- Base URL for iframe compatibility -->
+    <base href="https://digiturk.ilekasoft.com/views/Bayi/api/">
     
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -722,6 +754,29 @@ document.addEventListener('DOMContentLoaded', function() {
         if (params.has('kampanya')) formData.append('kampanya', params.get('kampanya'));
         if (params.has('paket')) formData.append('paket', params.get('paket'));
         
+        // Kaynak site bilgisi ekle (iframe parent URL)
+        try {
+            // iframe içindeyse parent'ın URL'ini al
+            if (window.self !== window.top && window.parent.location.href) {
+                const kaynakSite = new URL(window.parent.location.href).hostname;
+                formData.append('kaynak_site', kaynakSite);
+                console.log('Kaynak site (parent): ' + kaynakSite);
+            } else if (document.referrer) {
+                const kaynakSite = new URL(document.referrer).hostname;
+                formData.append('kaynak_site', kaynakSite);
+                console.log('Kaynak site (referrer): ' + kaynakSite);
+            }
+        } catch(e) {
+            // Cross-origin iframe'de parent.location erişimi engellenirse referrer kullan
+            if (document.referrer) {
+                const kaynakSite = new URL(document.referrer).hostname;
+                formData.append('kaynak_site', kaynakSite);
+                console.log('Kaynak site (referrer-catch): ' + kaynakSite);
+            } else {
+                console.log('Kaynak site tespit edilemedi, varsayılan kullanılacak');
+            }
+        }
+        
         console.log('Form gönderiliyor - URL parametreleri:', {
             api_ID: params.get('api_ID'),
             kampanya: params.get('kampanya'),
@@ -740,20 +795,34 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => response.json())
         .then(data => {
+            console.log('API Response:', data);
+            
             if (data.success) {
                 // URL parametrelerini koru
                 const params = new URLSearchParams(window.location.search);
                 
+                // Absolute URL oluştur (iframe uyumluluğu için)
+                const baseUrl = 'https://digiturk.ilekasoft.com/views/Bayi/api/';
+                let nextUrl = '';
+                
                 // Neo kampanyası ise adres adımını atla
                 if (data.isNeo) {
                     // Neo kampanya - Adres atlandı, direkt paket seçimine git
+                    nextUrl = baseUrl + 'basvuru-paket.php?' + params.toString();
                     console.log('Neo kampanya - Adres atlandı, bbkAddressCode otomatik üretildi');
-                    window.location.href = 'basvuru-paket.php?' + params.toString();
                 } else {
                     // Normal kampanya - Adres bilgilerine git
+                    nextUrl = baseUrl + 'basvuru-adres.php?' + params.toString();
                     console.log('Normal kampanya - Adres bilgilerine yönlendiriliyor...');
-                    window.location.href = 'basvuru-adres.php?' + params.toString();
                 }
+                
+                console.log('Yönlendirme URL:', nextUrl);
+                console.log('window.location.href değiştiriliyor...');
+                
+                // Yönlendirmeyi biraz geciktir (debugging için)
+                setTimeout(function() {
+                    window.location.href = nextUrl;
+                }, 100);
             } else {
                 // Hata durumunda kullanıcıya göster
                 alert('❌ Hata: ' + data.message);

@@ -16,14 +16,33 @@
  * @phone +90 501 357 10 85
  */
 
+// iframe cross-origin için header ayarları (dinamik origin)
+$allowedOrigin = '*';
+if (!empty($_SERVER['HTTP_ORIGIN'])) {
+    $allowedOrigin = $_SERVER['HTTP_ORIGIN'];
+} elseif (!empty($_SERVER['HTTP_REFERER'])) {
+    $refererParts = parse_url($_SERVER['HTTP_REFERER']);
+    $allowedOrigin = ($refererParts['scheme'] ?? 'https') . '://' . ($refererParts['host'] ?? '');
+}
+header('Access-Control-Allow-Origin: ' . $allowedOrigin);
+header('Access-Control-Allow-Credentials: true');
+header('P3P: CP="CAO PSA OUR"');
+
 // Session başlat
+// iframe içinde çalışması için SameSite=None ve Secure gerekli
 if (session_status() == PHP_SESSION_NONE) {
+    ini_set('session.cookie_samesite', 'None');
+    ini_set('session.cookie_secure', '1');
     session_start();
 }
 
+// URL parametrelerini al (yönlendirme için)
+$queryString = $_SERVER['QUERY_STRING'] ?? '';
+$redirectUrl = 'basvuru.php' . ($queryString ? '?' . $queryString : '');
+
 // Kimlik bilgilerinin session'da olup olmadığını kontrol et
 if (!isset($_SESSION['basvuru_kimlik'])) {
-    header('Location: basvuru.php');
+    header('Location: ' . $redirectUrl);
     exit;
 }
 
@@ -267,6 +286,9 @@ $kimlik = $_SESSION['basvuru_kimlik'];
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Digiturk Başvuru Formu - Adres Bilgileri">
     <title>Adres Bilgileri - Digiturk Başvuru</title>
+    
+    <!-- Base URL for iframe compatibility -->
+    <base href="https://digiturk.ilekasoft.com/views/Bayi/api/">
     
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">

@@ -36,6 +36,13 @@ Digiturk Bireysel Bayi Yönetim ve Otomasyon Platformu - Kapsamlı API entegrasy
 - ✅ Slider ve kampanya görselleri
 - ✅ Başvuru log ve takip sistemi
 
+### 🌐 Web Servis API
+- ✅ RESTful JSON endpoint'leri
+- ✅ HTTP Basic Authentication
+- ✅ Swagger benzeri dokümantasyon
+- ✅ Cross-origin iframe desteği
+- ✅ Postman/cURL uyumluluğu
+
 ### 📊 İris Rapor Sistemi
 - ✅ CSV/Excel dosya yükleme (Toplu veri aktarımı)
 - ✅ Rapor analizi ve karşılaştırma
@@ -468,21 +475,17 @@ Yetkisiz kullanım, kopyalama veya dağıtım yasaktır.
 
 ## 📅 Versiyon Geçmişi
 
-### v1.0.0 - Başvuru Sistemi (22 Kasım 2025)
-- ✅ Public başvuru formu (Neo & Satellite)
-- ✅ Session yönetimi
-- ✅ Otomatik kampanya tespiti
-- ✅ Debug araçları
+**Güncel Sürüm:** v1.1.0 - Web Servis API (28 Kasım 2025)
 
-### v0.9.0 - Yetki Sistemi (21 Ekim 2025)
-- ✅ Sayfa bazlı yetkilendirme
-- ✅ Admin bypass
-- ✅ Kendi kaydını görme
+### 🚀 Son Değişiklikler
+- ✅ RESTful Web Servis API sistemi
+- ✅ HTTP Basic Authentication 
+- ✅ Swagger benzeri dokümantasyon
+- ✅ VoIP toplu harcama sistemi
+- ✅ iframe cross-origin desteği
 
-### v0.8.0 - İris Rapor (Eylül 2025)
-- ✅ CSV/Excel yükleme
-- ✅ Rapor analizi
-- ✅ Karşılaştırma sistemi
+**Detaylı versiyon notları:** [CHANGELOG.md](CHANGELOG.md)  
+**Release dokümantasyonu:** [.github/RELEASES/](.github/RELEASES/)
 
 ---
 
