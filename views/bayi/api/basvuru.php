@@ -602,10 +602,9 @@ footer {
 
                             <!-- Email -->
                             <div class="col-md-6">
-                                <label for="email" class="form-label">E-posta</label>
+                                <label for="email" class="form-label">E-posta <span class="text-danger">*</span></label>
                                 <input type="email" class="form-control" id="email" name="email" 
-                                       maxlength="100" placeholder="ornek@mail.com">
-                                <small class="text-muted">İsteğe bağlı</small>
+                                       required maxlength="100" placeholder="ornek@mail.com">
                             </div>
 
                             <!-- Telefon -->

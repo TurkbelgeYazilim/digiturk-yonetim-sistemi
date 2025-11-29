@@ -676,7 +676,8 @@ include '../../../includes/header.php';
                                                data-phone-number="<?php echo htmlspecialchars($basvuru['API_basvuru_phoneNumber'] ?? ''); ?>"
                                                data-citizen="<?php echo htmlspecialchars($basvuru['API_basvuru_citizenNumber'] ?? ''); ?>"
                                                data-kullanici-id="<?php echo htmlspecialchars($basvuru['users_id'] ?? ''); ?>"
-                                               data-kullanici-email="<?php echo htmlspecialchars($basvuru['email'] ?? ''); ?>">
+                                               data-kullanici-email="<?php echo htmlspecialchars($basvuru['email'] ?? ''); ?>"
+                                               data-organisation-code="<?php echo htmlspecialchars($basvuru['api_iris_kullanici_OrganisationCd'] ?? ''); ?>">
                                     </td>
                                     <td><?php echo $basvuru['API_basvuru_ID']; ?></td>
                                     <td>
@@ -790,6 +791,96 @@ include '../../../includes/header.php';
                         </tbody>
                     </table>
             <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<!-- Mail Önizleme Modal -->
+<div class="modal fade" id="mailPreviewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-envelope me-2"></i>No Silme Maili Önizleme
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Mail gönderilmeden önce içeriği kontrol edin. Onayladıktan sonra mail gönderilecektir.
+                </div>
+
+                <!-- Alıcı Bilgileri -->
+                <div class="card mb-3">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0"><i class="fas fa-users me-2"></i>Alıcı Bilgileri</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <strong>Kime:</strong>
+                            <div class="badge bg-primary ms-2" id="preview_to"></div>
+                        </div>
+                        <div class="mb-2">
+                            <strong>CC:</strong>
+                            <div id="preview_cc" class="d-inline-block ms-2"></div>
+                        </div>
+                        <div>
+                            <strong>BCC:</strong>
+                            <div class="badge bg-secondary ms-2" id="preview_bcc"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mail İçeriği -->
+                <div class="card mb-3">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0"><i class="fas fa-envelope-open-text me-2"></i>Mail İçeriği</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <strong>Konu:</strong>
+                            <div class="ms-2" id="preview_subject"></div>
+                        </div>
+                        <div>
+                            <strong>İçerik:</strong>
+                            <div class="border rounded p-3 mt-2" style="background-color: #f8f9fa;">
+                                <pre id="preview_body" class="mb-0" style="white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 13px;"></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Seçilen Kayıtlar -->
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0"><i class="fas fa-list me-2"></i>Seçilen Kayıtlar (<span id="preview_count">0</span> Adet)</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                            <table class="table table-sm table-striped">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Telefon</th>
+                                        <th>TC Kimlik</th>
+                                        <th>Kullanıcı Email</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="preview_items"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-2"></i>İptal
+                </button>
+                <button type="button" class="btn btn-success" id="btnConfirmSendMail" onclick="confirmSendMail()">
+                    <i class="fas fa-paper-plane me-2"></i>Onayla ve Gönder
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -1188,7 +1279,10 @@ function updateSelectedCount() {
     $('#btnSendDeleteMail').prop('disabled', checkedCount === 0);
 }
 
-// No silme maili gönder
+// Global değişken - seçilen kayıtları tut
+var pendingMailData = null;
+
+// No silme maili gönder - Önizleme modalını aç
 function sendDeleteMail() {
     var selectedItems = [];
     
@@ -1200,7 +1294,8 @@ function sendDeleteMail() {
             phoneNumber: $(this).data('phone-number'),
             citizen: $(this).data('citizen'),
             kullaniciId: $(this).data('kullanici-id'),
-            kullaniciEmail: $(this).data('kullanici-email')
+            kullaniciEmail: $(this).data('kullanici-email'),
+            organisationCode: $(this).data('organisation-code')
         });
     });
     
@@ -1209,42 +1304,207 @@ function sendDeleteMail() {
         return;
     }
     
-    if (!confirm(selectedItems.length + ' başvuru için silme maili göndermek istediğinizden emin misiniz?')) {
+    // Mail içeriğini hazırla (callback ile)
+    prepareMailPreview(selectedItems, function(mailData) {
+        pendingMailData = mailData;
+        // Modal'ı doldur ve göster
+        showMailPreviewModal(mailData);
+    });
+}
+
+// Mail önizleme verilerini hazırla
+function prepareMailPreview(selectedItems, callback) {
+    var phoneList = [];
+    var tcList = [];
+    var ccEmails = ['broadbandsales@digiturk.com.tr'];
+    
+    // Organisation kodlarını topla
+    var organisationCodes = [];
+    var kullaniciIds = [];
+    
+    selectedItems.forEach(function(item) {
+        // Telefon numarasını formatla
+        var phone = $.trim(item.phoneCountry) + ' ' + $.trim(item.phoneArea) + ' ' + $.trim(item.phoneNumber);
+        phoneList.push(phone);
+        
+        // TC kimlik numarası
+        if (item.citizen) {
+            tcList.push($.trim(item.citizen));
+        }
+        
+        // Organisation kodlarını topla
+        if (item.organisationCode && !organisationCodes.includes(item.organisationCode)) {
+            organisationCodes.push(item.organisationCode);
+        }
+        
+        // Kullanıcı ID'lerini topla
+        if (item.kullaniciId) {
+            kullaniciIds.push(item.kullaniciId);
+        }
+    });
+    
+    // Seçili kayıtların kullanıcı emaillerini ekle
+    selectedItems.forEach(function(item) {
+        if (item.kullaniciEmail && !ccEmails.includes(item.kullaniciEmail)) {
+            ccEmails.push(item.kullaniciEmail);
+        }
+    });
+    
+    // Dinamik CC'leri backend'den al
+    $.ajax({
+        url: 'api_basvuru_send_delete_mail.php',
+        type: 'POST',
+        data: JSON.stringify({ 
+            preview: true,
+            organisationCodes: organisationCodes
+        }),
+        contentType: 'application/json',
+        dataType: 'json',
+        success: function(response) {
+            if (response.success && response.dynamicCc) {
+                // Dinamik CC'leri ekle
+                response.dynamicCc.forEach(function(email) {
+                    if (email && !ccEmails.includes(email)) {
+                        ccEmails.push(email);
+                    }
+                });
+            }
+            
+            // Mail içeriği
+            var subject = "Numara Sildirme";
+            var body = "Merhaba,\n\n";
+            body += "Aşağıdaki numaraları silebilir miyiz?\n\n";
+            body += "Telefon Numaraları:\n";
+            body += phoneList.join("\n");
+            
+            if (tcList.length > 0) {
+                body += "\n\nTC Kimlik Numaraları:\n";
+                body += tcList.join("\n");
+            }
+            
+            body += "\n\nTeşekkürler.";
+            
+            var mailData = {
+                to: 'WH_dgtbayisatisdestek@concentrix.com',
+                cc: ccEmails,
+                bcc: 'batuhan.kahraman@ileka.com.tr',
+                subject: subject,
+                body: body,
+                items: selectedItems,
+                organisationCodes: organisationCodes
+            };
+            
+            callback(mailData);
+        },
+        error: function() {
+            // Hata durumunda yine de göster
+            var subject = "Numara Sildirme";
+            var body = "Merhaba,\n\n";
+            body += "Aşağıdaki numaraları silebilir miyiz?\n\n";
+            body += "Telefon Numaraları:\n";
+            body += phoneList.join("\n");
+            
+            if (tcList.length > 0) {
+                body += "\n\nTC Kimlik Numaraları:\n";
+                body += tcList.join("\n");
+            }
+            
+            body += "\n\nTeşekkürler.";
+            
+            var mailData = {
+                to: 'WH_dgtbayisatisdestek@concentrix.com',
+                cc: ccEmails,
+                bcc: 'batuhan.kahraman@ileka.com.tr',
+                subject: subject,
+                body: body,
+                items: selectedItems,
+                organisationCodes: organisationCodes
+            };
+            
+            callback(mailData);
+        }
+    });
+}
+
+// Mail önizleme modalını göster
+function showMailPreviewModal(mailData) {
+    // Alıcı bilgileri
+    $('#preview_to').text(mailData.to);
+    
+    var ccHtml = '';
+    mailData.cc.forEach(function(email) {
+        ccHtml += '<span class="badge bg-info me-1 mb-1">' + email + '</span>';
+    });
+    $('#preview_cc').html(ccHtml);
+    
+    $('#preview_bcc').text(mailData.bcc);
+    
+    // Mail içeriği
+    $('#preview_subject').text(mailData.subject);
+    $('#preview_body').text(mailData.body);
+    
+    // Seçilen kayıtlar
+    $('#preview_count').text(mailData.items.length);
+    
+    var itemsHtml = '';
+    mailData.items.forEach(function(item) {
+        var phone = $.trim(item.phoneCountry) + ' ' + $.trim(item.phoneArea) + ' ' + $.trim(item.phoneNumber);
+        var tc = item.citizen || '-';
+        var email = item.kullaniciEmail || '-';
+        
+        itemsHtml += '<tr>';
+        itemsHtml += '<td>' + item.id + '</td>';
+        itemsHtml += '<td>' + phone + '</td>';
+        itemsHtml += '<td>' + tc + '</td>';
+        itemsHtml += '<td>' + email + '</td>';
+        itemsHtml += '</tr>';
+    });
+    $('#preview_items').html(itemsHtml);
+    
+    // Modal'ı göster
+    new bootstrap.Modal(document.getElementById('mailPreviewModal')).show();
+}
+
+// Mail gönderimini onayla ve gönder
+function confirmSendMail() {
+    if (!pendingMailData) {
+        alert('Mail verisi bulunamadı!');
         return;
     }
     
     // Butonu devre dışı bırak
-    $('#btnSendDeleteMail').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Gönderiliyor...');
-    
-    console.log('Seçilen kayıtlar:', selectedItems);
+    $('#btnConfirmSendMail').prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-2"></i>Gönderiliyor...');
     
     $.ajax({
         url: 'api_basvuru_send_delete_mail.php',
         type: 'POST',
-        data: JSON.stringify(selectedItems),
+        data: JSON.stringify(pendingMailData.items),
         contentType: 'application/json',
         dataType: 'json',
         success: function(response) {
-            console.log('Başarılı yanıt:', response);
             if (response.success) {
                 alert('Mail başarıyla gönderildi!');
+                
+                // Modal'ı kapat
+                bootstrap.Modal.getInstance(document.getElementById('mailPreviewModal')).hide();
+                
                 // Checkbox'ları temizle
                 $('.basvuru-checkbox:checked').prop('checked', false);
                 $('#selectAll').prop('checked', false);
                 updateSelectedCount();
+                
+                // Pending data'yı temizle
+                pendingMailData = null;
             } else {
                 alert('Mail gönderilirken hata oluştu: ' + (response.message || 'Bilinmeyen hata'));
             }
         },
         error: function(xhr, status, error) {
             console.error('AJAX Hatası:', xhr.responseText);
-            console.error('Status:', status);
-            console.error('Error:', error);
-            alert('Mail gönderilirken hata oluştu: ' + error + '\n\nDetay: ' + xhr.responseText);
+            alert('Mail gönderilirken hata oluştu: ' + error);
         },
         complete: function() {
-            $('#btnSendDeleteMail').prop('disabled', false).html('No Silme Maili Gönder (<span id="selectedCount">0</span>)');
-            updateSelectedCount();
+            $('#btnConfirmSendMail').prop('disabled', false).html('<i class="fas fa-paper-plane me-2"></i>Onayla ve Gönder');
         }
     });
 }

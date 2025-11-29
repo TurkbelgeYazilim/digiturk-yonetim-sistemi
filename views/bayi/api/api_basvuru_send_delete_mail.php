@@ -17,7 +17,52 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 // JSON verisi al
 $input = file_get_contents('php://input');
-$selectedItems = json_decode($input, true);
+$data = json_decode($input, true);
+
+// Preview mode kontrolü
+if (isset($data['preview']) && $data['preview'] === true) {
+    // Sadece dinamik CC listesini döndür
+    $organisationCodes = $data['organisationCodes'] ?? [];
+    
+    if (empty($organisationCodes)) {
+        echo json_encode(['success' => true, 'dynamicCc' => []]);
+        exit;
+    }
+    
+    $config = require_once '../../../config/mssql.php';
+    
+    try {
+        $dsn = "sqlsrv:Server={$config['host']};Database={$config['database']}";
+        $conn = new PDO($dsn, $config['username'], $config['password']);
+        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        
+        $placeholders = str_repeat('?,', count($organisationCodes) - 1) . '?';
+        $orgCcQuery = $conn->prepare("
+            SELECT DISTINCT u.email
+            FROM users u
+            INNER JOIN API_kullanici a ON a.users_ID = u.id
+            WHERE a.api_iris_kullanici_OrganisationCd IN ($placeholders)
+            AND u.user_group_id = 2
+            AND u.status = 1
+            AND u.email IS NOT NULL
+            AND u.email != ''
+        ");
+        $orgCcQuery->execute($organisationCodes);
+        $orgCcResults = $orgCcQuery->fetchAll(PDO::FETCH_ASSOC);
+        
+        $dynamicCc = array_map(function($row) { return trim($row['email']); }, $orgCcResults);
+        
+        echo json_encode(['success' => true, 'dynamicCc' => $dynamicCc]);
+        exit;
+        
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        exit;
+    }
+}
+
+// Normal mail gönderimi
+$selectedItems = $data;
 
 if (empty($selectedItems) || !is_array($selectedItems)) {
     http_response_code(400);
@@ -55,13 +100,36 @@ try {
         }
     }
     
+    // Organisation Code'ları topla
+    $organisationCodes = array_unique(array_filter(array_column($selectedItems, 'organisationCode')));
+    
     // Mail içeriğini hazırla
     $phoneList = [];
     $tcList = [];
-    $ccEmails = [
-        'broadbandsales@digiturk.com.tr',
-        'samet.yilmam@digiturk.com.tr'
-    ];
+    $ccEmails = ['broadbandsales@digiturk.com.tr'];
+    
+    // Dinamik CC: Organisation Code'a göre Grup 2 kullanıcıları
+    if (!empty($organisationCodes)) {
+        $placeholders = str_repeat('?,', count($organisationCodes) - 1) . '?';
+        $orgCcQuery = $conn->prepare("
+            SELECT DISTINCT u.email
+            FROM users u
+            INNER JOIN API_kullanici a ON a.users_ID = u.id
+            WHERE a.api_iris_kullanici_OrganisationCd IN ($placeholders)
+            AND u.user_group_id = 2
+            AND u.status = 1
+            AND u.email IS NOT NULL
+            AND u.email != ''
+        ");
+        $orgCcQuery->execute($organisationCodes);
+        $orgCcResults = $orgCcQuery->fetchAll(PDO::FETCH_ASSOC);
+        
+        foreach ($orgCcResults as $row) {
+            if (!empty($row['email']) && !in_array(trim($row['email']), $ccEmails)) {
+                $ccEmails[] = trim($row['email']);
+            }
+        }
+    }
     
     foreach ($selectedItems as $item) {
         // Telefon numarasını formatla

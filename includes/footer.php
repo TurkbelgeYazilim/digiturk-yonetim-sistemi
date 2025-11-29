@@ -14,7 +14,7 @@
                     <p class="mb-0 text-light-50">
                         <?php
                         // Basit versiyon sistemi
-                        $version = '2.0.275';
+                        $version = '1.2.0';
                         $lastUpdate = date('d.m.Y H:i');
                         echo "v{$version} - Son güncelleme: {$lastUpdate}";
                         ?>
