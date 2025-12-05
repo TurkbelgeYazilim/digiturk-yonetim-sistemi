@@ -14,6 +14,7 @@ updateLastActivity();
 $sayfaYetkileri = [
     'gor' => false,
     'kendi_kullanicini_gor' => false,
+    'sorumlu_ekibini_gor' => false,
     'ekle' => false,
     'duzenle' => false,
     'sil' => false
@@ -27,6 +28,7 @@ if ($isAdmin) {
     $sayfaYetkileri = [
         'gor' => 1,
         'kendi_kullanicini_gor' => 0, // 0 = Herkesi görebilir
+        'sorumlu_ekibini_gor' => 0,
         'ekle' => 1,
         'duzenle' => 1,
         'sil' => 1
@@ -44,6 +46,7 @@ if ($isAdmin) {
             SELECT 
                 tsy.gor,
                 tsy.kendi_kullanicini_gor,
+                tsy.sorumlu_ekibini_gor,
                 tsy.ekle,
                 tsy.duzenle,
                 tsy.sil,
@@ -65,6 +68,7 @@ if ($isAdmin) {
             $sayfaYetkileri = [
                 'gor' => (int)$yetkiResult['gor'],
                 'kendi_kullanicini_gor' => (int)$yetkiResult['kendi_kullanicini_gor'],
+                'sorumlu_ekibini_gor' => (int)$yetkiResult['sorumlu_ekibini_gor'],
                 'ekle' => (int)$yetkiResult['ekle'],
                 'duzenle' => (int)$yetkiResult['duzenle'],
                 'sil' => (int)$yetkiResult['sil']
@@ -117,6 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $phone = trim($_POST['phone']);
                 $status = ($_POST['status'] === 'AKTIF' || $_POST['status'] == '1') ? 1 : 0;
                 $groupId = $_POST['user_group_id'] ? (int)$_POST['user_group_id'] : null;
+                $sorumluKullaniciId = !empty($_POST['sorumlu_kullanici_id']) ? (int)$_POST['sorumlu_kullanici_id'] : null;
                 
                 // Email kontrolü
                 $checkSql = "SELECT id FROM users WHERE email = ?";
@@ -129,10 +134,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     $passwordHash = password_hash($password, PASSWORD_DEFAULT);
                     
-                    $sql = "INSERT INTO users (email, password_hash, first_name, last_name, phone, status, user_group_id) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?)";
+                    $sql = "INSERT INTO users (email, password_hash, first_name, last_name, phone, status, user_group_id, sorumlu_kullanici_id) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
                     $stmt = $conn->prepare($sql);
-                    $stmt->execute([$email, $passwordHash, $firstName, $lastName, $phone, $status, $groupId]);
+                    $stmt->execute([$email, $passwordHash, $firstName, $lastName, $phone, $status, $groupId, $sorumluKullaniciId]);
                     
                     $message = 'Kullanıcı başarıyla eklendi.';
                     $messageType = 'success';
@@ -154,6 +159,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $phone = trim($_POST['phone']);
                 $status = ($_POST['status'] === 'AKTIF' || $_POST['status'] == '1') ? 1 : 0;
                 $groupId = $_POST['user_group_id'] ? (int)$_POST['user_group_id'] : null;
+                $sorumluKullaniciId = !empty($_POST['sorumlu_kullanici_id']) ? (int)$_POST['sorumlu_kullanici_id'] : null;
                 
                 // Email kontrolü (mevcut kullanıcı hariç)
                 $checkSql = "SELECT id FROM users WHERE email = ? AND id != ?";
@@ -164,10 +170,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $message = 'Bu e-posta adresi başka bir kullanıcı tarafından kullanılıyor.';
                     $messageType = 'danger';
                 } else {
-                    $sql = "UPDATE users SET email = ?, first_name = ?, last_name = ?, phone = ?, status = ?, user_group_id = ?, updated_at = GETDATE() 
+                    $sql = "UPDATE users SET email = ?, first_name = ?, last_name = ?, phone = ?, status = ?, user_group_id = ?, sorumlu_kullanici_id = ?, updated_at = GETDATE() 
                             WHERE id = ?";
                     $stmt = $conn->prepare($sql);
-                    $stmt->execute([$email, $firstName, $lastName, $phone, $status, $groupId, $id]);
+                    $stmt->execute([$email, $firstName, $lastName, $phone, $status, $groupId, $sorumluKullaniciId, $id]);
                     
                     $message = 'Kullanıcı başarıyla güncellendi.';
                     $messageType = 'success';
@@ -191,6 +197,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute([$passwordHash, $id]);
                 
                 $message = 'Şifre başarıyla değiştirildi.';
+                $messageType = 'success';
+                break;
+                
+            case 'unlock':
+                // Sadece admin kilidi kaldırabilir
+                if (!$isAdmin) {
+                    $message = 'Kilit kaldırma yetkiniz bulunmamaktadır.';
+                    $messageType = 'danger';
+                    break;
+                }
+                
+                $id = $_POST['id'];
+                
+                $sql = "UPDATE users SET login_attempts = 0, locked_until = NULL WHERE id = ?";
+                $stmt = $conn->prepare($sql);
+                $stmt->execute([$id]);
+                
+                $message = 'Kullanıcı kilidi başarıyla kaldırıldı.';
                 $messageType = 'success';
                 break;
                 
@@ -228,9 +252,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 try {
     $conn = getDatabaseConnection();
     
-    $groupSql = "SELECT id, group_name, group_description as description FROM user_groups ORDER BY group_name";
-    $groupStmt = $conn->prepare($groupSql);
-    $groupStmt->execute();
+    // Admin ise tüm grupları göster, değilse sadece id=8,9 olan grupları göster
+    if ($isAdmin) {
+        $groupSql = "SELECT id, group_name, group_description as description FROM user_groups ORDER BY group_name";
+        $groupStmt = $conn->prepare($groupSql);
+        $groupStmt->execute();
+    } else {
+        $groupSql = "SELECT id, group_name, group_description as description FROM user_groups WHERE id IN (8, 9) ORDER BY group_name";
+        $groupStmt = $conn->prepare($groupSql);
+        $groupStmt->execute();
+    }
     $userGroups = $groupStmt->fetchAll(PDO::FETCH_ASSOC);
     
 } catch (Exception $e) {
@@ -243,24 +274,63 @@ $error = '';
 try {
     $conn = getDatabaseConnection();
     
-    // kendi_kullanicini_gor = 1 ise sadece kendi kaydını getir
+    // kendi_kullanicini_gor = 1 ise hiyerarşik göster
     if ($sayfaYetkileri['kendi_kullanicini_gor'] == 1) {
-        $sql = "SELECT u.id, u.email, u.first_name, u.last_name, u.phone, u.status, u.created_at, 
-                       u.last_login, u.login_attempts, u.user_group_id,
-                       ug.group_name, ug.group_description as group_description
-                FROM users u 
-                LEFT JOIN user_groups ug ON u.user_group_id = ug.id
-                WHERE u.id = ?
-                ORDER BY u.created_at DESC";
+        // Hiyerarşik kontrol
+        if ($sayfaYetkileri['sorumlu_ekibini_gor'] == 1) {
+            // Back Office: Sorumlusunun ekibini göster
+            $sql = "WITH AltKullanicilar AS (
+                        -- Sorumlusunu bul
+                        SELECT sorumlu_kullanici_id as id 
+                        FROM users 
+                        WHERE id = ? AND sorumlu_kullanici_id IS NOT NULL
+                        
+                        UNION ALL
+                        
+                        -- Sorumlusunun altındaki herkesi bul
+                        SELECT u.id 
+                        FROM users u
+                        INNER JOIN AltKullanicilar ak ON u.sorumlu_kullanici_id = ak.id
+                    )
+                    SELECT u.id, u.email, u.first_name, u.last_name, u.phone, u.status, u.created_at, 
+                           u.last_login, u.login_attempts, u.user_group_id, u.sorumlu_kullanici_id,
+                           ug.group_name, ug.group_description as group_description,
+                           su.first_name + ' ' + su.last_name as sorumlu_kullanici_adi
+                    FROM users u 
+                    INNER JOIN AltKullanicilar alt ON u.id = alt.id
+                    LEFT JOIN user_groups ug ON u.user_group_id = ug.id
+                    LEFT JOIN users su ON u.sorumlu_kullanici_id = su.id
+                    ORDER BY u.created_at DESC";
+        } else {
+            // Normal: Kendini + altındakileri göster
+            $sql = "WITH AltKullanicilar AS (
+                        SELECT id FROM users WHERE id = ?
+                        UNION ALL
+                        SELECT u.id 
+                        FROM users u
+                        INNER JOIN AltKullanicilar ak ON u.sorumlu_kullanici_id = ak.id
+                    )
+                    SELECT u.id, u.email, u.first_name, u.last_name, u.phone, u.status, u.created_at, 
+                           u.last_login, u.login_attempts, u.user_group_id, u.sorumlu_kullanici_id,
+                           ug.group_name, ug.group_description as group_description,
+                           su.first_name + ' ' + su.last_name as sorumlu_kullanici_adi
+                    FROM users u 
+                    INNER JOIN AltKullanicilar alt ON u.id = alt.id
+                    LEFT JOIN user_groups ug ON u.user_group_id = ug.id
+                    LEFT JOIN users su ON u.sorumlu_kullanici_id = su.id
+                    ORDER BY u.created_at DESC";
+        }
         $stmt = $conn->prepare($sql);
         $stmt->execute([$currentUser['id']]);
     } else {
-        // kendi_kullanicini_gor = 0 ise tüm kullanıcıları getir
+        // kendi_kullanicini_gor = 0 ise tüm kullanıcıları getir (Admin)
         $sql = "SELECT u.id, u.email, u.first_name, u.last_name, u.phone, u.status, u.created_at, 
-                       u.last_login, u.login_attempts, u.user_group_id,
-                       ug.group_name, ug.group_description as group_description
+                       u.last_login, u.login_attempts, u.user_group_id, u.sorumlu_kullanici_id,
+                       ug.group_name, ug.group_description as group_description,
+                       su.first_name + ' ' + su.last_name as sorumlu_kullanici_adi
                 FROM users u 
                 LEFT JOIN user_groups ug ON u.user_group_id = ug.id
+                LEFT JOIN users su ON u.sorumlu_kullanici_id = su.id
                 ORDER BY u.created_at DESC";
         $stmt = $conn->prepare($sql);
         $stmt->execute();
@@ -334,6 +404,7 @@ include '../../../includes/header.php';
                             <th>E-posta</th>
                             <th>Telefon</th>
                             <th>Grup</th>
+                            <th>Sorumlu Kullanıcı</th>
                             <th>Durum</th>
                             <th>Kayıt Tarihi</th>
                             <th>Son Giriş</th>
@@ -374,6 +445,15 @@ include '../../../includes/header.php';
                                         <?php endif; ?>
                                     </td>
                                     <td>
+                                        <?php if (!empty($user['sorumlu_kullanici_adi'])): ?>
+                                            <span class="text-muted">
+                                                <?php echo htmlspecialchars($user['sorumlu_kullanici_adi']); ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
                                         <?php
                                         $statusClass = ($user['status'] == 1) ? 'bg-success' : 'bg-danger';
                                         $statusText = ($user['status'] == 1) ? 'AKTIF' : 'PASIF';
@@ -403,6 +483,12 @@ include '../../../includes/header.php';
                                                 <i class="fas fa-key"></i>
                                             </button>
                                             <?php endif; ?>
+                                            <?php if ($isAdmin && $user['login_attempts'] >= 5): ?>
+                                            <button type="button" class="btn btn-sm btn-outline-success" 
+                                                    onclick="unlockUser(<?php echo $user['id']; ?>, '<?php echo htmlspecialchars($user['first_name'] . ' ' . $user['last_name']); ?>')">
+                                                <i class="fas fa-unlock"></i>
+                                            </button>
+                                            <?php endif; ?>
                                             <?php if ($sayfaYetkileri['sil'] == 1 && $user['id'] != $currentUser['id']): ?>
                                             <button type="button" class="btn btn-sm btn-outline-danger" 
                                                     onclick="deleteUser(<?php echo $user['id']; ?>, '<?php echo htmlspecialchars($user['first_name'] . ' ' . $user['last_name']); ?>')">
@@ -418,7 +504,7 @@ include '../../../includes/header.php';
                             <?php endforeach; ?>
                         <?php else: ?>
                             <tr>
-                                <td colspan="9" class="text-center py-5 text-muted">
+                                <td colspan="10" class="text-center py-5 text-muted">
                                     <i class="fas fa-users fa-3x mb-3 d-block"></i>
                                     <h5>Henüz kullanıcı bulunmuyor</h5>
                                     <p>İlk kullanıcıyı eklemek için "Yeni Kullanıcı" butonuna tıklayın.</p>
@@ -489,6 +575,23 @@ include '../../../includes/header.php';
                         </select>
                     </div>
                     <div class="mb-3">
+                        <label for="add_sorumlu" class="form-label">Sorumlu Kullanıcı</label>
+                        <select class="form-select" id="add_sorumlu" name="sorumlu_kullanici_id">
+                            <option value="">Sorumlu Yok</option>
+                            <?php foreach ($users as $u): ?>
+                                <?php if ($u['user_group_id'] != 9): // ID=9 olan grup hariç ?>
+                                    <option value="<?php echo $u['id']; ?>">
+                                        <?php echo htmlspecialchars($u['first_name'] . ' ' . $u['last_name']); ?>
+                                        <?php if ($u['group_name']): ?>
+                                            (<?php echo htmlspecialchars($u['group_name']); ?>)
+                                        <?php endif; ?>
+                                    </option>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text">Bu kullanıcının sorumlusu olacak kişiyi seçin</div>
+                    </div>
+                    <div class="mb-3">
                         <label for="add_status" class="form-label">Durum</label>
                         <select class="form-select" id="add_status" name="status" required>
                             <option value="1">Aktif</option>
@@ -557,6 +660,23 @@ include '../../../includes/header.php';
                         </select>
                     </div>
                     <div class="mb-3">
+                        <label for="edit_sorumlu" class="form-label">Sorumlu Kullanıcı</label>
+                        <select class="form-select" id="edit_sorumlu" name="sorumlu_kullanici_id">
+                            <option value="">Sorumlu Yok</option>
+                            <?php foreach ($users as $u): ?>
+                                <?php if ($u['user_group_id'] != 9): // ID=9 olan grup hariç ?>
+                                    <option value="<?php echo $u['id']; ?>">
+                                        <?php echo htmlspecialchars($u['first_name'] . ' ' . $u['last_name']); ?>
+                                        <?php if ($u['group_name']): ?>
+                                            (<?php echo htmlspecialchars($u['group_name']); ?>)
+                                        <?php endif; ?>
+                                    </option>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text">Bu kullanıcının sorumlusu olacak kişiyi seçin</div>
+                    </div>
+                    <div class="mb-3">
                         <label for="edit_status" class="form-label">Durum</label>
                         <select class="form-select" id="edit_status" name="status" required>
                             <option value="1">Aktif</option>
@@ -616,6 +736,7 @@ function editUser(user) {
     document.getElementById('edit_email').value = user.email;
     document.getElementById('edit_phone').value = user.phone || '';
     document.getElementById('edit_group').value = user.user_group_id || '';
+    document.getElementById('edit_sorumlu').value = user.sorumlu_kullanici_id || '';
     document.getElementById('edit_status').value = user.status;
     
     new bootstrap.Modal(document.getElementById('editUserModal')).show();
@@ -627,6 +748,19 @@ function changePassword(userId, userName) {
     document.getElementById('new_password').value = '';
     
     new bootstrap.Modal(document.getElementById('changePasswordModal')).show();
+}
+
+function unlockUser(userId, userName) {
+    if (confirm(userName + ' kullanıcısının kilidini kaldırmak istediğinizden emin misiniz?')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.innerHTML = `
+            <input type="hidden" name="action" value="unlock">
+            <input type="hidden" name="id" value="${userId}">
+        `;
+        document.body.appendChild(form);
+        form.submit();
+    }
 }
 
 function deleteUser(userId, userName) {

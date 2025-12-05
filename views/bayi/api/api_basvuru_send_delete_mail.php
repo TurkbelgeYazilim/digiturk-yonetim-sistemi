@@ -105,7 +105,6 @@ try {
     
     // Mail içeriğini hazırla
     $phoneList = [];
-    $tcList = [];
     $ccEmails = ['broadbandsales@digiturk.com.tr'];
     
     // Dinamik CC: Organisation Code'a göre Grup 2 kullanıcıları
@@ -132,14 +131,16 @@ try {
     }
     
     foreach ($selectedItems as $item) {
-        // Telefon numarasını formatla
+        // Telefon ve TC'yi aynı satırda formatla
         $phone = trim($item['phoneCountry']) . ' ' . trim($item['phoneArea']) . ' ' . trim($item['phoneNumber']);
-        $phoneList[] = $phone;
+        $tc = !empty($item['citizen']) ? trim($item['citizen']) : '';
         
-        // TC kimlik numarası
-        if (!empty($item['citizen'])) {
-            $tcList[] = trim($item['citizen']);
+        // Telefon: 90 534 4037051 / TC: 24773181452 formatı
+        $line = "Telefon: " . $phone;
+        if ($tc) {
+            $line .= " / TC: " . $tc;
         }
+        $phoneList[] = $line;
         
         // Kullanıcı email'ini CC'ye ekle
         if (!empty($item['kullaniciId']) && isset($kullaniciEmails[$item['kullaniciId']])) {
@@ -155,14 +156,7 @@ try {
     
     $body = "Merhaba,\n\n";
     $body .= "Aşağıdaki numaraları silebilir miyiz?\n\n";
-    $body .= "Telefon Numaraları:\n";
     $body .= implode("\n", $phoneList);
-    
-    if (!empty($tcList)) {
-        $body .= "\n\nTC Kimlik Numaraları:\n";
-        $body .= implode("\n", $tcList);
-    }
-    
     $body .= "\n\nTeşekkürler.";
     
     // Mail gönder
@@ -173,6 +167,34 @@ try {
     $result = sendMail($to, $subject, $body, false, $cc, $bcc);
     
     if ($result) {
+        // Mail başarıyla gönderildi, veritabanına log kaydet
+        $logMessage = date('Y-m-d H:i:s') . ' - No silme maili gönderildi';
+        
+        foreach ($selectedItems as $item) {
+            $basvuruId = $item['id'];
+            
+            // Mevcut açıklamayı al
+            $getAciklamaQuery = $conn->prepare("
+                SELECT API_basvuru_Basvuru_Aciklama 
+                FROM API_basvuruListesi 
+                WHERE API_basvuru_ID = ?
+            ");
+            $getAciklamaQuery->execute([$basvuruId]);
+            $currentAciklama = $getAciklamaQuery->fetchColumn();
+            
+            // Yeni açıklamayı oluştur (mevcut + yeni log)
+            $newAciklama = $currentAciklama ? $currentAciklama . "\n" . $logMessage : $logMessage;
+            
+            // Veritabanını güncelle
+            $updateQuery = $conn->prepare("
+                UPDATE API_basvuruListesi 
+                SET API_basvuru_Basvuru_Aciklama = ?,
+                    API_basvuru_guncelleme_tarihi = GETDATE()
+                WHERE API_basvuru_ID = ?
+            ");
+            $updateQuery->execute([$newAciklama, $basvuruId]);
+        }
+        
         echo json_encode([
             'success' => true,
             'message' => 'Mail başarıyla gönderildi',

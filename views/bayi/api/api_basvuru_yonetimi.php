@@ -27,6 +27,7 @@ if ($isAdmin) {
     $sayfaYetkileri = [
         'gor' => 1,
         'kendi_kullanicini_gor' => 0,
+        'sorumlu_ekibini_gor' => 0,
         'ekle' => 1,
         'duzenle' => 1,
         'sil' => 1
@@ -40,6 +41,7 @@ if ($isAdmin) {
             SELECT 
                 tsy.gor,
                 tsy.kendi_kullanicini_gor,
+                tsy.sorumlu_ekibini_gor,
                 tsy.ekle,
                 tsy.duzenle,
                 tsy.sil
@@ -59,6 +61,7 @@ if ($isAdmin) {
             $sayfaYetkileri = [
                 'gor' => (int)$yetkiResult['gor'],
                 'kendi_kullanicini_gor' => (int)$yetkiResult['kendi_kullanicini_gor'],
+                'sorumlu_ekibini_gor' => (int)$yetkiResult['sorumlu_ekibini_gor'],
                 'ekle' => (int)$yetkiResult['ekle'],
                 'duzenle' => (int)$yetkiResult['duzenle'],
                 'sil' => (int)$yetkiResult['sil']
@@ -67,6 +70,7 @@ if ($isAdmin) {
             $sayfaYetkileri = [
                 'gor' => 1,
                 'kendi_kullanicini_gor' => 1,
+                'sorumlu_ekibini_gor' => 0,
                 'ekle' => 0,
                 'duzenle' => 0,
                 'sil' => 0
@@ -76,6 +80,7 @@ if ($isAdmin) {
         $sayfaYetkileri = [
             'gor' => 1,
             'kendi_kullanicini_gor' => 1,
+            'sorumlu_ekibini_gor' => 0,
             'ekle' => 0,
             'duzenle' => 0,
             'sil' => 0
@@ -248,6 +253,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $message = 'Başvuru başarıyla silindi.';
                 $messageType = 'success';
                 break;
+                
+            case 'add_copy_log':
+                $basvuruId = $_POST['basvuru_id'] ?? null;
+                
+                if ($basvuruId) {
+                    // Mevcut açıklamayı getir
+                    $selectSql = "SELECT API_basvuru_Basvuru_Aciklama FROM API_basvuruListesi WHERE API_basvuru_ID = ?";
+                    $selectStmt = $conn->prepare($selectSql);
+                    $selectStmt->execute([$basvuruId]);
+                    $mevcutAciklama = $selectStmt->fetchColumn();
+                    
+                    // Yeni log satırı
+                    $yeniLog = date('Y-m-d H:i:s') . ' - Bilgiler WhatsApp grubuna kopyalandı';
+                    
+                    // Mevcut açıklama varsa alt satıra ekle, yoksa direkt ekle
+                    $guncelAciklama = trim($mevcutAciklama) ? $mevcutAciklama . "\n" . $yeniLog : $yeniLog;
+                    
+                    // Güncelle
+                    $updateSql = "UPDATE API_basvuruListesi SET API_basvuru_Basvuru_Aciklama = ? WHERE API_basvuru_ID = ?";
+                    $updateStmt = $conn->prepare($updateSql);
+                    $updateStmt->execute([$guncelAciklama, $basvuruId]);
+                    
+                    echo json_encode(['success' => true]);
+                } else {
+                    echo json_encode(['success' => false, 'message' => 'Başvuru ID bulunamadı']);
+                }
+                exit;
+                break;
         }
         
     } catch (Exception $e) {
@@ -292,13 +325,102 @@ try {
             LEFT JOIN API_GetNeoCampaignList neo ON bl.API_basvuru_Paket_ID = neo.API_GetNeoCampaignList_ID AND bl.API_basvuru_CampaignList_ID = 2";
     
     if ($sayfaYetkileri['kendi_kullanicini_gor']) {
-        $sql .= " WHERE ak.users_ID = ?";
+        // Hiyerarşik kontrol
+        if ($sayfaYetkileri['sorumlu_ekibini_gor']) {
+            // Back Office: Sorumlusunun ekibini göster
+            $sql = "WITH AltKullanicilar AS (
+                        -- Sorumlusunu bul
+                        SELECT sorumlu_kullanici_id as id 
+                        FROM users 
+                        WHERE id = ? AND sorumlu_kullanici_id IS NOT NULL
+                        
+                        UNION ALL
+                        
+                        -- Sorumlusunun altındaki herkesi bul (recursive)
+                        SELECT u.id 
+                        FROM users u
+                        INNER JOIN AltKullanicilar ak ON u.sorumlu_kullanici_id = ak.id
+                    )
+                    SELECT 
+                        bl.*,
+                        bd.API_basvuru_durum_Mesaj,
+                        bd.API_basvuru_durum_renk,
+                        rc.ResponseCode_Message as API_basvuru_ResponseCode_Mesaj,
+                        rc.ResponseCode_renk as API_basvuru_ResponseCode_renk,
+                        cl.API_CampaignList_CampaignName,
+                        ct.API_GetCardTypeList_card_name,
+                        ak.api_iris_kullanici_OrganisationCd,
+                        ak.api_iris_kullanici_LoginCd AS API_kullanici_LoginCd,
+                        u.id as users_id,
+                        u.first_name,
+                        u.last_name,
+                        u.email,
+                        CASE 
+                            WHEN bl.API_basvuru_CampaignList_ID = 1 THEN 
+                                CONCAT(sat.API_GetSatelliteCampaignList_PaketAdi, ' / ', sat.API_GetSatelliteCampaignList_Fiyat)
+                            WHEN bl.API_basvuru_CampaignList_ID = 2 THEN 
+                                CONCAT(neo.API_GetNeoCampaignList_PaketAdi, ' / ', neo.API_GetNeoCampaignList_Fiyat)
+                            ELSE NULL
+                        END AS Paket_Bilgisi
+                    FROM API_basvuruListesi bl
+                    LEFT JOIN API_basvuruDurum bd ON bl.API_basvuru_basvuru_durum_ID = bd.API_basvuru_durum_ID
+                    LEFT JOIN API_ResponseCode rc ON bl.API_basvuru_ResponseCode_ID = rc.ResponseCode_ID
+                    LEFT JOIN API_CampaignList cl ON bl.API_basvuru_CampaignList_ID = cl.API_CampaignList_ID
+                    LEFT JOIN API_GetCardTypeList ct ON bl.API_basvuru_identityCardType_ID = ct.API_GetCardTypeList_ID
+                    LEFT JOIN API_kullanici ak ON bl.API_basvuru_kullanici_ID = ak.api_iris_kullanici_ID
+                    INNER JOIN users u ON ak.users_ID = u.id
+                    LEFT JOIN API_GetSatelliteCampaignList sat ON bl.API_basvuru_Paket_ID = sat.API_GetSatelliteCampaignList_ID AND bl.API_basvuru_CampaignList_ID = 1
+                    LEFT JOIN API_GetNeoCampaignList neo ON bl.API_basvuru_Paket_ID = neo.API_GetNeoCampaignList_ID AND bl.API_basvuru_CampaignList_ID = 2
+                    INNER JOIN AltKullanicilar alt ON u.id = alt.id
+                    ORDER BY bl.API_basvuru_olusturma_tarih DESC";
+        } else {
+            // Normal: Kendini + altındakileri göster
+            $sql = "WITH AltKullanicilar AS (
+                        SELECT id FROM users WHERE id = ?
+                        UNION ALL
+                        SELECT u.id 
+                        FROM users u
+                        INNER JOIN AltKullanicilar ak ON u.sorumlu_kullanici_id = ak.id
+                    )
+                    SELECT 
+                        bl.*,
+                        bd.API_basvuru_durum_Mesaj,
+                        bd.API_basvuru_durum_renk,
+                        rc.ResponseCode_Message as API_basvuru_ResponseCode_Mesaj,
+                        rc.ResponseCode_renk as API_basvuru_ResponseCode_renk,
+                        cl.API_CampaignList_CampaignName,
+                        ct.API_GetCardTypeList_card_name,
+                        ak.api_iris_kullanici_OrganisationCd,
+                        ak.api_iris_kullanici_LoginCd AS API_kullanici_LoginCd,
+                        u.id as users_id,
+                        u.first_name,
+                        u.last_name,
+                        u.email,
+                        CASE 
+                            WHEN bl.API_basvuru_CampaignList_ID = 1 THEN 
+                                CONCAT(sat.API_GetSatelliteCampaignList_PaketAdi, ' / ', sat.API_GetSatelliteCampaignList_Fiyat)
+                            WHEN bl.API_basvuru_CampaignList_ID = 2 THEN 
+                                CONCAT(neo.API_GetNeoCampaignList_PaketAdi, ' / ', neo.API_GetNeoCampaignList_Fiyat)
+                            ELSE NULL
+                        END AS Paket_Bilgisi
+                    FROM API_basvuruListesi bl
+                    LEFT JOIN API_basvuruDurum bd ON bl.API_basvuru_basvuru_durum_ID = bd.API_basvuru_durum_ID
+                    LEFT JOIN API_ResponseCode rc ON bl.API_basvuru_ResponseCode_ID = rc.ResponseCode_ID
+                    LEFT JOIN API_CampaignList cl ON bl.API_basvuru_CampaignList_ID = cl.API_CampaignList_ID
+                    LEFT JOIN API_GetCardTypeList ct ON bl.API_basvuru_identityCardType_ID = ct.API_GetCardTypeList_ID
+                    LEFT JOIN API_kullanici ak ON bl.API_basvuru_kullanici_ID = ak.api_iris_kullanici_ID
+                    INNER JOIN users u ON ak.users_ID = u.id
+                    LEFT JOIN API_GetSatelliteCampaignList sat ON bl.API_basvuru_Paket_ID = sat.API_GetSatelliteCampaignList_ID AND bl.API_basvuru_CampaignList_ID = 1
+                    LEFT JOIN API_GetNeoCampaignList neo ON bl.API_basvuru_Paket_ID = neo.API_GetNeoCampaignList_ID AND bl.API_basvuru_CampaignList_ID = 2
+                    INNER JOIN AltKullanicilar alt ON u.id = alt.id
+                    ORDER BY bl.API_basvuru_olusturma_tarih DESC";
+        }
         $params = [$currentUser['id']];
     } else {
+        // Admin: Herkesi göster
+        $sql .= " ORDER BY bl.API_basvuru_olusturma_tarih DESC";
         $params = [];
     }
-    
-    $sql .= " ORDER BY bl.API_basvuru_olusturma_tarih DESC";
     
     $stmt = $conn->prepare($sql);
     $stmt->execute($params);
@@ -313,8 +435,25 @@ try {
     $apiKullaniciFilterList = array_keys($apiKullaniciFilterList);
     sort($apiKullaniciFilterList);
     
-    // Durum listesini getir
-    $durumSql = "SELECT * FROM API_basvuruDurum WHERE API_basvuru_durum_durum = 1 ORDER BY API_basvuru_durum_Mesaj";
+    // Durum listesini getir (kullanıcı grubuna göre filtrele)
+    if ($currentUser['group_id'] == 9) {
+        // Agent (ID=9): Sadece agent_gor=1 olanları göster
+        $durumSql = "SELECT * FROM API_basvuruDurum 
+                     WHERE API_basvuru_durum_durum = 1 
+                     AND API_basvuru_durum_agent_gor = 1 
+                     ORDER BY API_basvuru_durum_Mesaj";
+    } elseif ($currentUser['group_id'] == 8) {
+        // Back Office (ID=8): Sadece backoffice_gor=1 olanları göster
+        $durumSql = "SELECT * FROM API_basvuruDurum 
+                     WHERE API_basvuru_durum_durum = 1 
+                     AND API_basvuru_durum_backoffice_gor = 1 
+                     ORDER BY API_basvuru_durum_Mesaj";
+    } else {
+        // Diğer gruplar: Tümünü göster
+        $durumSql = "SELECT * FROM API_basvuruDurum 
+                     WHERE API_basvuru_durum_durum = 1 
+                     ORDER BY API_basvuru_durum_Mesaj";
+    }
     $durumStmt = $conn->prepare($durumSql);
     $durumStmt->execute();
     $durumlar = $durumStmt->fetchAll();
@@ -365,21 +504,34 @@ try {
     
     // API Kullanıcı listesi (form için)
     if ($sayfaYetkileri['kendi_kullanicini_gor']) {
-        // Sadece kendi kullanıcısını göster
-        $apiKullaniciSql = "SELECT ak.api_iris_kullanici_ID, ak.api_iris_kullanici_LoginCd, u.first_name, u.last_name
+        // Sadece kendi kullanıcısını + sorumlusunun API bilgisini göster
+        $apiKullaniciSql = "SELECT ak.api_iris_kullanici_ID, ak.api_iris_kullanici_LoginCd, u.first_name, u.last_name,
+                                   CASE WHEN u.id = ? THEN 1 ELSE 0 END as is_current_user
                             FROM API_kullanici ak
                             LEFT JOIN users u ON ak.users_ID = u.id
-                            WHERE ak.api_iris_kullanici_durum = 1 AND ak.users_ID = ?
-                            ORDER BY ak.api_iris_kullanici_LoginCd";
+                            WHERE ak.api_iris_kullanici_durum = 1 
+                            AND (ak.users_ID = ? OR ak.users_ID = (SELECT sorumlu_kullanici_id FROM users WHERE id = ?))
+                            ORDER BY is_current_user DESC, ak.api_iris_kullanici_LoginCd";
         $apiKullaniciStmt = $conn->prepare($apiKullaniciSql);
-        $apiKullaniciStmt->execute([$currentUser['id']]);
+        $apiKullaniciStmt->execute([$currentUser['id'], $currentUser['id'], $currentUser['id']]);
         $apiKullanicilar = $apiKullaniciStmt->fetchAll();
         
         // Mevcut kullanıcının API kullanıcı ID'sini al
-        $currentApiKullaniciId = !empty($apiKullanicilar) ? $apiKullanicilar[0]['api_iris_kullanici_ID'] : null;
+        $currentApiKullaniciId = null;
+        foreach ($apiKullanicilar as $apiKullanici) {
+            if ($apiKullanici['is_current_user'] == 1) {
+                $currentApiKullaniciId = $apiKullanici['api_iris_kullanici_ID'];
+                break;
+            }
+        }
+        // Eğer kullanıcının API kaydı yoksa sorumlusununki varsayılan olsun
+        if ($currentApiKullaniciId === null && !empty($apiKullanicilar)) {
+            $currentApiKullaniciId = $apiKullanicilar[0]['api_iris_kullanici_ID'];
+        }
     } else {
         // Tüm kullanıcıları göster
-        $apiKullaniciSql = "SELECT ak.api_iris_kullanici_ID, ak.api_iris_kullanici_LoginCd, u.first_name, u.last_name
+        $apiKullaniciSql = "SELECT ak.api_iris_kullanici_ID, ak.api_iris_kullanici_LoginCd, u.first_name, u.last_name,
+                                   0 as is_current_user
                             FROM API_kullanici ak
                             LEFT JOIN users u ON ak.users_ID = u.id
                             WHERE ak.api_iris_kullanici_durum = 1
@@ -417,6 +569,14 @@ try {
     $canEdit = $sayfaYetkileri['duzenle'];
     $canDelete = $sayfaYetkileri['sil'];
     $canView = $sayfaYetkileri['gor'];
+    $canSendDeleteMail = true; // No Silme Maili Gönder butonu
+    $canResend = $sayfaYetkileri['ekle']; // Yeniden Gönder butonu (ekle yetkisiyle aynı)
+    
+    // ID=9 grubu için Yeniden Gönder ve No Silme Maili Gönder butonlarını gizle
+    if ($currentUser['group_id'] == 9) {
+        $canResend = false;
+        $canSendDeleteMail = false;
+    }
     
 } catch (Exception $e) {
     $message = 'Veriler yüklenirken hata oluştu: ' . $e->getMessage();
@@ -498,9 +658,14 @@ include '../../../includes/header.php';
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2><i class="fas fa-file-alt me-2"></i>Başvuru Yönetimi</h2>
                 <div class="btn-group">
-                    <button type="button" class="btn btn-danger" id="btnSendDeleteMail" onclick="sendDeleteMail()" disabled>
-                        <i class="fas fa-envelope me-2"></i>No Silme Maili Gönder (<span id="selectedCount">0</span>)
+                    <button type="button" class="btn btn-success" onclick="exportToExcel()">
+                        <i class="fas fa-file-excel me-2"></i>Excel İndir
                     </button>
+                    <?php if ($canSendDeleteMail): ?>
+                        <button type="button" class="btn btn-danger" id="btnSendDeleteMail" onclick="sendDeleteMail()" disabled>
+                            <i class="fas fa-envelope me-2"></i>No Silme Maili Gönder (<span id="selectedCount">0</span>)
+                        </button>
+                    <?php endif; ?>
                     <?php if ($canAdd): ?>
                         <button type="button" class="btn btn-primary" onclick="showAddModal()">
                             <i class="fas fa-plus me-2"></i>Yeni Başvuru
@@ -612,6 +777,7 @@ include '../../../includes/header.php';
                     <label class="form-label">Başvuru Durum</label>
                     <select id="filterResponseCode" class="form-select">
                         <option value="">Tümü</option>
+                        <option value="NULL">Boş</option>
                         <?php foreach ($responseCodes as $code): ?>
                             <option value="<?php echo htmlspecialchars($code['ResponseCode_Message']); ?>">
                                 <?php echo htmlspecialchars($code['ResponseCode_Message']); ?>
@@ -622,6 +788,26 @@ include '../../../includes/header.php';
                 <div class="col-12 col-md-2">
                     <label class="form-label">Ad / Soyad</label>
                     <input type="text" id="filterAdSoyad" class="form-control" placeholder="Ad/Soyad ara...">
+                </div>
+                <div class="col-12 col-md-2">
+                    <label class="form-label">Telefon</label>
+                    <input type="text" id="filterTelefon" class="form-control" placeholder="Telefon ara...">
+                </div>
+                <div class="col-12 col-md-2">
+                    <label class="form-label">Mesaj</label>
+                    <input type="text" id="filterMesaj" class="form-control" placeholder="Response mesaj ara...">
+                </div>
+                <div class="col-12 col-md-2">
+                    <label class="form-label">Açıklama</label>
+                    <input type="text" id="filterAciklama" class="form-control" placeholder="Açıklama ara...">
+                </div>
+                <div class="col-12 col-md-2">
+                    <label class="form-label">Oluşturma Tarihi</label>
+                    <input type="date" id="filterOlusturmaTarih" class="form-control">
+                </div>
+                <div class="col-12 col-md-2">
+                    <label class="form-label">Güncelleme Tarihi</label>
+                    <input type="date" id="filterGuncellemeTarih" class="form-control">
                 </div>
                 <div class="col-12 col-md-1 d-flex align-items-end">
                     <label class="form-label">&nbsp;</label>
@@ -662,6 +848,7 @@ include '../../../includes/header.php';
                                 <th>Talep<br>Durum</th>
                                 <th>Açıklama</th>
                                 <th>Oluşturma<br>Tarihi</th>
+                                <th>Güncelleme<br>Tarihi</th>
                                 <th>İşlemler</th>
                             </tr>
                         </thead>
@@ -699,6 +886,7 @@ include '../../../includes/header.php';
                                                 <span><?php echo htmlspecialchars($displayPhone); ?></span>
                                                 <button type="button"
                                                         class="btn btn-outline-primary btn-sm copy-contact"
+                                                        data-basvuru-id="<?php echo htmlspecialchars($basvuru['API_basvuru_ID'], ENT_QUOTES); ?>"
                                                         data-phone-area="<?php echo htmlspecialchars($phoneArea, ENT_QUOTES); ?>"
                                                         data-phone-number="<?php echo htmlspecialchars($phoneNumber, ENT_QUOTES); ?>"
                                                         data-citizen="<?php echo htmlspecialchars($citizenNumber, ENT_QUOTES); ?>"
@@ -754,20 +942,31 @@ include '../../../includes/header.php';
                                     </td>
                                     <td>
                                         <?php 
-                                        $tarih = $basvuru['API_basvuru_guncelleme_tarihi'] ?: $basvuru['API_basvuru_olusturma_tarih'];
-                                        if ($tarih): ?>
-                                            <?php echo date('d.m.Y H:i', strtotime($tarih)); ?>
+                                        $olusturmaTarih = $basvuru['API_basvuru_olusturma_tarih'];
+                                        if ($olusturmaTarih): ?>
+                                            <?php echo date('d.m.Y H:i', strtotime($olusturmaTarih)); ?>
+                                        <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php 
+                                        $guncellemeTarih = $basvuru['API_basvuru_guncelleme_tarihi'];
+                                        if ($guncellemeTarih): ?>
+                                            <?php echo date('d.m.Y H:i', strtotime($guncellemeTarih)); ?>
                                         <?php else: ?>
                                             <span class="text-muted">-</span>
                                         <?php endif; ?>
                                     </td>
                                     <td>
                                         <div class="btn-group btn-group-sm" role="group">
-                                            <button type="button" class="btn btn-outline-info" 
-                                                    onclick="showResendModal(<?php echo htmlspecialchars(json_encode($basvuru)); ?>)"
-                                                    title="Tekrar Gönder">
-                                                <i class="fas fa-redo"></i>
-                                            </button>
+                                            <?php if ($canResend): ?>
+                                                <button type="button" class="btn btn-outline-info" 
+                                                        onclick="showResendModal(<?php echo htmlspecialchars(json_encode($basvuru)); ?>)"
+                                                        title="Tekrar Gönder">
+                                                    <i class="fas fa-redo"></i>
+                                                </button>
+                                            <?php endif; ?>
                                             
                                             <?php if ($canEdit): ?>
                                                 <button type="button" class="btn btn-outline-warning" 
@@ -1212,6 +1411,95 @@ include '../../../includes/header.php';
 </div>
 
 <script>
+// Excel export fonksiyonu
+function exportToExcel() {
+    // DataTable instance'ını al
+    const table = window.basvuruTable;
+    if (!table) {
+        alert('Tablo bulunamadı!');
+        return;
+    }
+    
+    // Başlıkları al (Checkbox ve İşlemler hariç)
+    const headers = [];
+    $('#basvuruTable thead th').each(function(index) {
+        const text = $(this).text().trim();
+        // Checkbox (ilk) ve İşlemler (son) sütunlarını atla
+        if (index > 0 && text !== 'İşlemler') {
+            headers.push(text);
+        }
+    });
+    
+    // Tüm verileri al (filtrelenmiş değil, tüm data)
+    const data = [];
+    table.rows({search: 'applied'}).every(function() {
+        const rowData = this.data();
+        const row = [];
+        // İlk sütun (checkbox) ve son sütun (işlemler) hariç tüm kolonları al
+        for (let i = 1; i < rowData.length - 1; i++) {
+            // HTML taglerini temizle
+            const cellText = $('<div>').html(rowData[i]).text().trim();
+            row.push(cellText);
+        }
+        data.push(row);
+    });
+    
+    // Excel HTML oluştur
+    let html = '<html xmlns:x="urn:schemas-microsoft-com:office:excel">';
+    html += '<head>';
+    html += '<meta charset="utf-8">';
+    html += '<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>';
+    html += '<x:Name>Başvuru Yönetimi</x:Name>';
+    html += '<x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet>';
+    html += '</x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->';
+    html += '</head>';
+    html += '<body>';
+    html += '<table border="1">';
+    
+    // Başlıkları ekle
+    html += '<thead><tr>';
+    headers.forEach(header => {
+        html += '<th>' + header + '</th>';
+    });
+    html += '</tr></thead>';
+    
+    // Verileri ekle
+    html += '<tbody>';
+    data.forEach(row => {
+        html += '<tr>';
+        row.forEach(cell => {
+            html += '<td>' + cell + '</td>';
+        });
+        html += '</tr>';
+    });
+    html += '</tbody>';
+    
+    html += '</table>';
+    html += '</body>';
+    html += '</html>';
+    
+    // Dosya adı oluştur
+    const today = new Date();
+    const dateStr = today.getFullYear() + '-' + 
+                    String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+                    String(today.getDate()).padStart(2, '0');
+    const filename = 'Basvuru_Yonetimi_' + dateStr + '.xls';
+    
+    // Blob oluştur ve indir
+    const blob = new Blob(['\ufeff', html], {
+        type: 'application/vnd.ms-excel'
+    });
+    
+    // İndirme linki oluştur
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+    
+    // Temizlik
+    URL.revokeObjectURL(link.href);
+}
+
 $(document).ready(function() {
     window.basvuruTable = $('#basvuruTable').DataTable({
         language: {
@@ -1272,6 +1560,103 @@ $(document).ready(function() {
     });
 });
 
+// Filtre uygula fonksiyonu
+function applyFilters() {
+    var table = window.basvuruTable;
+    
+    // Kullanıcı filtresi (kolon 2 - gizli)
+    var filterUser = $('#filterUser').val();
+    table.column(2).search(filterUser ? filterUser : '');
+    
+    // API Kullanıcı filtresi (kolon 3)
+    var filterApiUser = $('#filterApiUser').val();
+    table.column(3).search(filterApiUser ? filterApiUser : '');
+    
+    // Ad/Soyad filtresi (kolon 4)
+    var filterAdSoyad = $('#filterAdSoyad').val();
+    table.column(4).search(filterAdSoyad ? filterAdSoyad : '');
+    
+    // Telefon filtresi (kolon 5)
+    var filterTelefon = $('#filterTelefon').val();
+    table.column(5).search(filterTelefon ? filterTelefon : '');
+    
+    // Paket filtresi (kolon 6)
+    var filterPaket = $('#filterPaket').val();
+    table.column(6).search(filterPaket ? filterPaket : '');
+    
+    // Kampanya filtresi (kolon 7)
+    var filterKampanya = $('#filterKampanya').val();
+    table.column(7).search(filterKampanya ? '^' + filterKampanya + '$' : '', true, false);
+    
+    // Başvuru Durum filtresi (kolon 8)
+    var filterResponseCode = $('#filterResponseCode').val();
+    if (filterResponseCode === 'NULL') {
+        // Boş olanları ara: sadece "-" veya boş olanlar
+        table.column(8).search('^-$', true, false);
+    } else {
+        table.column(8).search(filterResponseCode ? filterResponseCode : '');
+    }
+    
+    // Mesaj filtresi (kolon 9 - ResponseMessage)
+    var filterMesaj = $('#filterMesaj').val();
+    table.column(9).search(filterMesaj ? filterMesaj : '');
+    
+    // Talep Durum filtresi (kolon 10)
+    var filterDurum = $('#filterDurum').val();
+    table.column(10).search(filterDurum ? filterDurum : '');
+    
+    // Açıklama filtresi (kolon 11 - Basvuru_Aciklama)
+    var filterAciklama = $('#filterAciklama').val();
+    table.column(11).search(filterAciklama ? filterAciklama : '');
+    
+    // Filtreyi uygula
+    table.draw();
+}
+
+// Özel tarih filtreleme fonksiyonu
+$.fn.dataTable.ext.search.push(
+    function(settings, data, dataIndex) {
+        var filterOlusturmaTarih = $('#filterOlusturmaTarih').val();
+        var filterGuncellemeTarih = $('#filterGuncellemeTarih').val();
+        
+        // Oluşturma Tarihi filtresi (kolon 12)
+        if (filterOlusturmaTarih) {
+            var olusturmaTarihText = data[12] || '';
+            // Tarih formatı: dd.mm.yyyy hh:mm
+            if (olusturmaTarihText && olusturmaTarihText !== '-') {
+                var tarihParts = olusturmaTarihText.split(' ')[0].split('.');
+                if (tarihParts.length === 3) {
+                    var tablodakiTarih = tarihParts[2] + '-' + tarihParts[1] + '-' + tarihParts[0];
+                    if (tablodakiTarih !== filterOlusturmaTarih) {
+                        return false;
+                    }
+                }
+            } else {
+                return false;
+            }
+        }
+        
+        // Güncelleme Tarihi filtresi (kolon 13)
+        if (filterGuncellemeTarih) {
+            var guncellemeTarihText = data[13] || '';
+            // Tarih formatı: dd.mm.yyyy hh:mm
+            if (guncellemeTarihText && guncellemeTarihText !== '-') {
+                var tarihParts2 = guncellemeTarihText.split(' ')[0].split('.');
+                if (tarihParts2.length === 3) {
+                    var tablodakiTarih2 = tarihParts2[2] + '-' + tarihParts2[1] + '-' + tarihParts2[0];
+                    if (tablodakiTarih2 !== filterGuncellemeTarih) {
+                        return false;
+                    }
+                }
+            } else {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+);
+
 // Seçilen checkbox sayısını güncelle
 function updateSelectedCount() {
     var checkedCount = $('.basvuru-checkbox:checked').length;
@@ -1315,7 +1700,6 @@ function sendDeleteMail() {
 // Mail önizleme verilerini hazırla
 function prepareMailPreview(selectedItems, callback) {
     var phoneList = [];
-    var tcList = [];
     var ccEmails = ['broadbandsales@digiturk.com.tr'];
     
     // Organisation kodlarını topla
@@ -1323,14 +1707,16 @@ function prepareMailPreview(selectedItems, callback) {
     var kullaniciIds = [];
     
     selectedItems.forEach(function(item) {
-        // Telefon numarasını formatla
+        // Telefon ve TC'yi aynı satırda formatla
         var phone = $.trim(item.phoneCountry) + ' ' + $.trim(item.phoneArea) + ' ' + $.trim(item.phoneNumber);
-        phoneList.push(phone);
+        var tc = item.citizen ? $.trim(item.citizen) : '';
         
-        // TC kimlik numarası
-        if (item.citizen) {
-            tcList.push($.trim(item.citizen));
+        // Telefon: 90 534 4037051 / TC: 24773181452 formatı
+        var line = "Telefon: " + phone;
+        if (tc) {
+            line += " / TC: " + tc;
         }
+        phoneList.push(line);
         
         // Organisation kodlarını topla
         if (item.organisationCode && !organisationCodes.includes(item.organisationCode)) {
@@ -1374,14 +1760,7 @@ function prepareMailPreview(selectedItems, callback) {
             var subject = "Numara Sildirme";
             var body = "Merhaba,\n\n";
             body += "Aşağıdaki numaraları silebilir miyiz?\n\n";
-            body += "Telefon Numaraları:\n";
             body += phoneList.join("\n");
-            
-            if (tcList.length > 0) {
-                body += "\n\nTC Kimlik Numaraları:\n";
-                body += tcList.join("\n");
-            }
-            
             body += "\n\nTeşekkürler.";
             
             var mailData = {
@@ -1401,14 +1780,7 @@ function prepareMailPreview(selectedItems, callback) {
             var subject = "Numara Sildirme";
             var body = "Merhaba,\n\n";
             body += "Aşağıdaki numaraları silebilir miyiz?\n\n";
-            body += "Telefon Numaraları:\n";
             body += phoneList.join("\n");
-            
-            if (tcList.length > 0) {
-                body += "\n\nTC Kimlik Numaraları:\n";
-                body += tcList.join("\n");
-            }
-            
             body += "\n\nTeşekkürler.";
             
             var mailData = {
@@ -1509,39 +1881,9 @@ function confirmSendMail() {
     });
 }
 
-function applyFilters() {
-    var table = window.basvuruTable;
-    
-    <?php if (!$sayfaYetkileri['kendi_kullanicini_gor']): ?>
-    var userFilter = $('#filterUser').val();
-    table.column(2).search(userFilter);
-    <?php endif; ?>
-
-    if ($('#filterApiUser').length) {
-        var apiUserFilter = $('#filterApiUser').val();
-        table.column(3).search(apiUserFilter);
-    }
-    
-    var kampanyaFilter = $('#filterKampanya').val();
-    table.column(7).search(kampanyaFilter);
-    
-    var paketFilter = $('#filterPaket').val();
-    table.column(6).search(paketFilter);
-    
-    var durumFilter = $('#filterDurum').val();
-    table.column(10).search(durumFilter);
-    
-    var responseCodeFilter = $('#filterResponseCode').val();
-    table.column(8).search(responseCodeFilter);
-    
-    var adSoyadFilter = $('#filterAdSoyad').val();
-    table.column(4).search(adSoyadFilter);
-    
-    table.draw();
-}
-
 $(document).on('click', '.copy-contact', function() {
     var $btn = $(this);
+    var basvuruId = $btn.data('basvuruId');
     var phoneArea = $btn.data('phoneArea') || '';
     var phoneNumber = $btn.data('phoneNumber') || '';
     var citizen = $btn.data('citizen') || '';
@@ -1554,6 +1896,24 @@ $(document).on('click', '.copy-contact', function() {
         setTimeout(function() {
             $btn.html(originalHtml);
         }, 1500);
+        
+        // Açıklama alanına log ekle
+        if (basvuruId) {
+            $.ajax({
+                url: '',
+                method: 'POST',
+                data: {
+                    action: 'add_copy_log',
+                    basvuru_id: basvuruId
+                },
+                success: function(response) {
+                    console.log('Log eklendi');
+                },
+                error: function() {
+                    console.log('Log eklenirken hata oluştu');
+                }
+            });
+        }
     }).catch(function() {
         alert('Kopyalama sırasında hata oluştu.');
     });

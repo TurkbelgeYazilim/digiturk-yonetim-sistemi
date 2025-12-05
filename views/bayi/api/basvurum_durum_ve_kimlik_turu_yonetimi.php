@@ -308,6 +308,32 @@ if (isset($_POST['action']) && $_POST['action'] === 'update_color') {
     }
 }
 
+// Görünürlük güncelleme AJAX isteği
+if (isset($_POST['action']) && $_POST['action'] === 'update_visibility') {
+    try {
+        $conn = getDatabaseConnection();
+        $field = $_POST['field'];
+        $value = $_POST['value'] === 'true' ? 1 : 0;
+        $id = $_POST['id'];
+        
+        // Field adını kontrol et (SQL injection önlemi)
+        if (!in_array($field, ['agent_gor', 'backoffice_gor'])) {
+            throw new Exception('Geçersiz alan adı');
+        }
+        
+        $columnName = 'API_basvuru_durum_' . $field;
+        $sql = "UPDATE dbo.API_basvuruDurum SET $columnName = ?, API_basvuru_durum_guncelleme_tarihi = GETDATE() WHERE API_basvuru_durum_ID = ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->execute([$value, $id]);
+        
+        echo json_encode(['success' => true, 'message' => 'Görünürlük başarıyla güncellendi']);
+        exit;
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'message' => 'Hata: ' . $e->getMessage()]);
+        exit;
+    }
+}
+
 // Form işlemleri - API'den gelen veriler için bu kısım artık kullanılmıyor
 
 include '../../../includes/header.php';
@@ -379,6 +405,8 @@ include '../../../includes/header.php';
                                         <th>Açıklama</th>
                                         <th>Renk</th>
                                         <th>Durum</th>
+                                        <th>Agent Gör</th>
+                                        <th>Back Office Gör</th>
                                         <th>Güncelleme Tarihi</th>
                                     </tr>
                                 </thead>
@@ -410,12 +438,30 @@ include '../../../includes/header.php';
                                                         <?php echo $durum['API_basvuru_durum_durum'] ? 'Aktif' : 'Pasif'; ?>
                                                     </span>
                                                 </td>
+                                                <td class="text-center">
+                                                    <div class="form-check form-switch d-inline-block">
+                                                        <input class="form-check-input" type="checkbox" 
+                                                               data-id="<?php echo $durum['API_basvuru_durum_ID']; ?>"
+                                                               data-field="agent_gor"
+                                                               <?php echo ($durum['API_basvuru_durum_agent_gor'] ?? 1) ? 'checked' : ''; ?>
+                                                               onchange="updateVisibility(this)">
+                                                    </div>
+                                                </td>
+                                                <td class="text-center">
+                                                    <div class="form-check form-switch d-inline-block">
+                                                        <input class="form-check-input" type="checkbox" 
+                                                               data-id="<?php echo $durum['API_basvuru_durum_ID']; ?>"
+                                                               data-field="backoffice_gor"
+                                                               <?php echo ($durum['API_basvuru_durum_backoffice_gor'] ?? 1) ? 'checked' : ''; ?>
+                                                               onchange="updateVisibility(this)">
+                                                    </div>
+                                                </td>
                                                 <td><?php echo $durum['API_basvuru_durum_guncelleme_tarihi'] ? date('d.m.Y H:i', strtotime($durum['API_basvuru_durum_guncelleme_tarihi'])) : '-'; ?></td>
                                             </tr>
                                         <?php endforeach; ?>
                                     <?php else: ?>
                                         <tr>
-                                            <td colspan="6" class="text-center">Kayıt bulunamadı</td>
+                                            <td colspan="8" class="text-center">Kayıt bulunamadı</td>
                                         </tr>
                                     <?php endif; ?>
                                 </tbody>
@@ -563,6 +609,45 @@ function showMessage(type, message) {
     setTimeout(function() {
         $('.alert').fadeOut();
     }, 3000);
+}
+
+// Görünürlük güncelleme fonksiyonu
+function updateVisibility(checkbox) {
+    const id = $(checkbox).data('id');
+    const field = $(checkbox).data('field');
+    const value = $(checkbox).is(':checked');
+    
+    // Loading durumu
+    $(checkbox).prop('disabled', true);
+    
+    $.ajax({
+        url: window.location.href,
+        method: 'POST',
+        data: {
+            action: 'update_visibility',
+            id: id,
+            field: field,
+            value: value
+        },
+        dataType: 'json',
+        success: function(response) {
+            if (response.success) {
+                showMessage('success', response.message);
+            } else {
+                // Hata durumunda checkbox'ı eski haline döndür
+                $(checkbox).prop('checked', !value);
+                showMessage('danger', response.message);
+            }
+        },
+        error: function() {
+            // Hata durumunda checkbox'ı eski haline döndür
+            $(checkbox).prop('checked', !value);
+            showMessage('danger', 'Görünürlük güncellenirken bir hata oluştu.');
+        },
+        complete: function() {
+            $(checkbox).prop('disabled', false);
+        }
+    });
 }
 </script>
 

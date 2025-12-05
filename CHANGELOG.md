@@ -2,6 +2,38 @@
 
 Bu dosya projedeki tüm önemli değişiklikleri kronolojik olarak listeler.
 
+## [v1.2.0] - 2025-12-04 - Yetki Sistemi ve Otomasyon Geliştirmeleri
+
+### ✨ Yeni Özellikler
+- **Cron Otomasyonları:** 3 adet otomatik düzeltme cron job'u
+  - bbkAddressCode yenileme (her 30 dakika)
+  - ResponseCode düzeltme (her 10 dakika)
+  - E-mail otomatik tamamlama (her 5 dakika)
+- **Bayi Modülleri:** 
+  - Bayi tanımlama sayfası (users_bayi yönetimi)
+  - IRIS rapor yükleme sistemi (CSV streaming)
+  - Prim dönem tanımlama modülü
+- **Görünürlük Kontrolü:** API başvuru durumlarında agent/back office filtresi
+- **Token Yönetimi:** API kullanıcısı silme özelliği
+
+### 🔧 Teknik İyileştirmeler
+- Hierarchical permission system (recursive CTE queries)
+- AJAX checkbox updates for visibility flags
+- CSV streaming ile büyük dosya yükleme (memory optimized)
+- SQL injection önlemleri (parametrized queries)
+
+### 📁 Yeni/Güncellenen Dosyalar
+- `api/cron_bbk_yenile.php` - bbkAddressCode hata düzeltme
+- `api/cron_duzeltme.php` - ResponseCode reset otomasyonu
+- `api/cron_email_duzelt.php` - E-mail otomatik tamamlama
+- `views/Bayi/IrisRapor/bayi_tanimlama.php` - Bayi yönetimi
+- `views/Bayi/IrisRapor/iris_rapor_yukle.php` - CSV yükleme
+- `views/Bayi/Muhasebe/bayi_hakedis_prim_donem.php` - Dönem tanımlama
+- `views/Bayi/api/basvurum_durum_ve_kimlik_turu_yonetimi.php` - Görünürlük kontrolleri
+- `views/Bayi/api/kullanici_token_yonetimi.php` - Delete fonksiyonu
+
+---
+
 ## [v1.1.0] - 2025-11-28 - Web Servis API Sistemi
 
 ### ✨ Yeni Özellikler

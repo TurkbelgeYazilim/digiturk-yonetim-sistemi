@@ -1,6 +1,19 @@
-# Token Otomatik Yenileme - Cron Job Kurulumu
+# Cron Job Kurulum Dokümantasyonu
 
-## Plesk Cron Job Ayarları
+## 📋 Mevcut Cron Job'lar
+
+| Cron Job | Çalışma Sıklığı | Açıklama |
+|----------|----------------|----------|
+| `cron_token_yenile.php` | Her 6 saat | Token'ları otomatik yeniler |
+| `cron_email_duzelt.php` | Manuel | E-posta sorunlarını düzeltir |
+| `cron_basvuru_gonder.php` | Her 5 dakika | API'ye başvuru gönderir |
+| `cron_bbk_yenile.php` | Her 30 dakika | bbkAddressCode hatalarını temizler |
+
+---
+
+## 1️⃣ Token Otomatik Yenileme
+
+### Plesk Cron Job Ayarları
 
 ### 1. Plesk Paneline Giriş
 - Plesk paneline giriş yapın
@@ -151,13 +164,173 @@ Log dosyası: `d:\inetpub\ilekasoft.com\digiturk.ilekasoft.com\temp\cron_token_l
 
 ---
 
-## Önemli Notlar
+## 2️⃣ Otomatik Başvuru Gönderimi
+
+### Plesk Cron Job Ayarları
+
+**Komut:**
+```bash
+curl "https://digiturk.ilekasoft.com/api/cron_basvuru_gonder.php?key=CRON_SECRET_KEY_2025"
+```
+
+**Zamanlama: Her 5 dakika**
+- **Dakika:** 0,5,10,15,20,25,30,35,40,45,50,55
+- **Saat:** *
+- **Gün:** *
+- **Ay:** *
+- **Haftanın Günü:** *
+
+**Cron Formatı:**
+```
+0,5,10,15,20,25,30,35,40,45,50,55 * * * * curl "https://digiturk.ilekasoft.com/api/cron_basvuru_gonder.php?key=CRON_SECRET_KEY_2025"
+```
+
+### Nasıl Çalışır?
+- Her 5 dakikada bir çalışır
+- ResponseCode NULL olan başvuruları seçer
+- En fazla 5 başvuruyu işler (timeout önlemi)
+- API'ye POST request gönderir
+- Sonuçları veritabanına kaydeder
+- Case çakışması durumunda otomatik retry yapar
+
+### Log Takibi
+Log dosyası: `logs/cron_basvuru_log.txt`
+
+### Manuel Test
+```
+https://digiturk.ilekasoft.com/api/cron_basvuru_gonder.php?key=CRON_SECRET_KEY_2025
+```
+
+---
+
+## 3️⃣ bbkAddressCode Yenileme
+
+### Plesk Cron Job Ayarları
+
+**Komut:**
+```bash
+curl "https://digiturk.ilekasoft.com/api/cron_bbk_yenile.php?key=CRON_SECRET_KEY_2025"
+```
+
+**Zamanlama: Her 30 dakika**
+- **Dakika:** 0,30
+- **Saat:** *
+- **Gün:** *
+- **Ay:** *
+- **Haftanın Günü:** *
+
+**Cron Formatı:**
+```
+0,30 * * * * curl "https://digiturk.ilekasoft.com/api/cron_bbk_yenile.php?key=CRON_SECRET_KEY_2025"
+```
+
+### Nasıl Çalışır?
+- Her 30 dakikada bir çalışır
+- bbkAddressCode hataları olan başvuruları bulur
+- Yeni random kod üretir (130109 - 111069460 arası)
+- Başvuruyu tekrar gönderime hazırlar
+- En fazla 50 başvuruyu işler (sadece DB işlemi)
+
+### Tespit Edilen Hatalar
+```
+- "Value cannot be null"
+- "Parameter name: source"
+- "Geçersiz GeoLocationId değeri:0"
+```
+
+### Log Takibi
+Log dosyası: `logs/cron_bbk_log.txt`
+
+### Manuel Test
+```
+https://digiturk.ilekasoft.com/api/cron_bbk_yenile.php?key=CRON_SECRET_KEY_2025
+```
+
+---
+
+## 4️⃣ E-posta Düzeltme (Manuel)
+
+### Manuel Çalıştırma
+
+**Komut:**
+```bash
+curl "https://digiturk.ilekasoft.com/api/cron_email_duzelt.php?key=CRON_SECRET_KEY_2025"
+```
+
+**Not:** Bu cron job otomatik çalışmaz, sadece gerektiğinde manuel olarak çalıştırılır.
+
+### Nasıl Çalışır?
+- CSV dosyalarındaki e-posta sorunlarını düzeltir
+- Veritabanında güncelleme yapar
+- Log kaydı oluşturur
+
+---
+
+## ⚙️ Genel Ayarlar
+
+### Güvenlik Key'i
+Tüm cron job'lar aynı secret key kullanır: `CRON_SECRET_KEY_2025`
+
+Key'i değiştirmek için: `config/cron.php` dosyasını düzenleyin
+
+### Log Klasörü
+Tüm log dosyaları: `logs/` klasöründe
+
+### Log Temizleme
+Log dosyaları zamanla büyüyebilir, periyodik olarak temizleyin:
+```powershell
+# Eski logları yedekle
+Copy-Item logs\cron_basvuru_log.txt logs\cron_basvuru_log_backup.txt
+# Log dosyasını temizle
+Clear-Content logs\cron_basvuru_log.txt
+```
+
+---
+
+## 🔧 Sorun Giderme
+
+### 1. Cron Job Çalışmıyor
+- Plesk panelinde "History" sekmesinden logları kontrol edin
+- Key parametresinin doğru olduğunu kontrol edin
+- URL'nin erişilebilir olduğunu test edin
+
+### 2. Başvurular Gönderilmiyor
+- `logs/cron_basvuru_log.txt` dosyasını kontrol edin
+- Veritabanında `ResponseCode_ID IS NULL` kayıtlar var mı?
+- Token'ların geçerli olduğunu kontrol edin
+
+### 3. bbkAddressCode Yenileme Çalışmıyor
+- `logs/cron_bbk_log.txt` dosyasını kontrol edin
+- Hatalı başvuru var mı? (ResponseMessage sütununda ilgili hatalar)
+
+### 4. Log Dosyası Oluşmuyor
+- `logs` klasörünün yazma izinleri olduğundan emin olun
+- IIS kullanıcısının (IIS_IUSRS) write yetkisi olmalı
+
+---
+
+## 📊 Performans İpuçları
+
+### Başvuru Gönderimi
+- Her 5 dakikada 5 başvuru = Saatte 60 başvuru
+- Daha hızlı işlem için `MAX_KAYIT` değerini artırabilirsiniz
+- Ancak timeout riski artar
+
+### bbkAddressCode Yenileme
+- Her 30 dakikada 50 kayıt = Saatte 100 kayıt
+- Sadece DB işlemi olduğu için hızlı çalışır
+- Normal akışı yavaşlatmaz
+
+---
+
+## 📝 Önemli Notlar
 
 1. **İlk Çalışma:** Cron job ilk kez çalıştığında tüm kullanıcıları güncelleyebilir
-2. **API Limitleri:** API rate limit varsa, script kullanıcılar arasında 2 saniye bekler
+2. **API Limitleri:** API rate limit varsa, script kullanıcılar arasında 1-2 saniye bekler
 3. **Yetkilendirme:** Sadece `api_iris_kullanici_durum = 1` olan kullanıcılar işlenir
 4. **Hata Yönetimi:** API hatalarında bile veritabanı güncellenir (hata kodları kaydedilir)
-5. **Log Boyutu:** Log dosyası zamanla büyüyebilir, periyodik olarak temizleyin
+5. **Log Boyutu:** Log dosyaları zamanla büyüyebilir, periyodik olarak temizleyin
+6. **Timeout:** Başvuru gönderimi için 15 saniye timeout süresi vardır
 
 ---
 

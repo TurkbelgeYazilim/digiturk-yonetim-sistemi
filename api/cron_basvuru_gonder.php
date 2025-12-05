@@ -1,21 +1,35 @@
 <?php
 /**
  * Cron Job - Otomatik API Başvuru Gönderimi
- * Her 5 dakikada bir çalışır ve ResponseCode NULL olan başvuruları API'ye gönderir
+ * Her 2 dakikada bir çalışır ve ResponseCode NULL olan başvuruları API'ye gönderir
  * 
  * Web Test URL: https://digiturk.ilekasoft.com/api/cron_basvuru_gonder.php?key=CRON_SECRET_KEY_2025
  * 
  * Plesk Cron Ayarı:
- * Zamanlama: Her 5 dakika (cron: star-slash-5 * * * *)
+ * Zamanlama: Her 2 dakika
+ * Pattern: * / 2   *   *   *   * (boşluksuz yaz)
  * Komut: curl "https://digiturk.ilekasoft.com/api/cron_basvuru_gonder.php?key=CRON_SECRET_KEY_2025"
+ * 
+ * Optimizasyon Notu:
+ * - MAX_KAYIT=3: Ortalama 62sn, en fazla 92sn sürer
+ * - cURL timeout=60sn artırıldı, timeout sorunu giderildi
+ * - Her 2 dakikada çalışma güvenli ve yeterli marj sağlar
  */
+
+// ===== PHP TIMEOUT AYARLARI =====
+set_time_limit(300);                    // 5 dakika (300 saniye) - FastCGI timeout'u aşmamak için
+ini_set('max_execution_time', '300');   
+ignore_user_abort(true);                // Kullanıcı bağlantıyı kesse bile devam et
+// NOT: Timezone php.ini'de global olarak Europe/Istanbul olarak ayarlandı
 
 // ===== AYARLAR =====
 $cronConfig = require_once __DIR__ . '/../config/cron.php';
 $SECRET_KEY = $cronConfig['secret_key'];
-$MAX_KAYIT = 10;                        // Her çalışmada işlenecek maksimum kayıt
+$MAX_KAYIT = 3;                         // Her çalışmada işlenecek maksimum kayıt (daha da azaltıldı)
 $DENEME_LIMIT = 3;                      // Maksimum deneme sayısı
-$KAYIT_ARASI_BEKLEME = 2;               // Saniye - API rate limiting için
+$KAYIT_ARASI_BEKLEME = 1;               // Saniye - API rate limiting için (azaltıldı)
+$CURL_TIMEOUT = 60;                     // cURL timeout - 60 saniye (API yanıt süreleri uzun olabiliyor)
+$CURL_CONNECTTIMEOUT = 10;              // Bağlantı timeout - 10 saniye
 
 // Güvenlik kontrolü - URL'den çağrılıyorsa key kontrolü yap
 if (php_sapi_name() !== 'cli') {
@@ -117,7 +131,7 @@ try {
                 bl.API_basvuru_son_gonderim_denemesi IS NULL
                 OR DATEDIFF(MINUTE, bl.API_basvuru_son_gonderim_denemesi, GETDATE()) >= 5
               )
-            ORDER BY bl.API_basvuru_olusturma_tarih ASC";
+            ORDER BY bl.API_basvuru_olusturma_tarih DESC";
     
     $stmt = $conn->prepare($sql);
     $stmt->execute([$DENEME_LIMIT]);
@@ -295,7 +309,12 @@ try {
                 CURLOPT_HTTPHEADER => $headers,
                 CURLOPT_SSL_VERIFYPEER => false,
                 CURLOPT_SSL_VERIFYHOST => false,
-                CURLOPT_TIMEOUT => 30
+                CURLOPT_TIMEOUT => $CURL_TIMEOUT,
+                CURLOPT_CONNECTTIMEOUT => $CURL_CONNECTTIMEOUT,
+                CURLOPT_TCP_KEEPALIVE => 1,
+                CURLOPT_TCP_KEEPIDLE => 30,
+                CURLOPT_FRESH_CONNECT => false,
+                CURLOPT_FORBID_REUSE => false
             ]);
         } else {
             // Normal başvuru için POST request
@@ -307,16 +326,54 @@ try {
                 CURLOPT_HTTPHEADER => $headers,
                 CURLOPT_SSL_VERIFYPEER => false,
                 CURLOPT_SSL_VERIFYHOST => false,
-                CURLOPT_TIMEOUT => 30
+                CURLOPT_TIMEOUT => $CURL_TIMEOUT,
+                CURLOPT_CONNECTTIMEOUT => $CURL_CONNECTTIMEOUT,
+                CURLOPT_TCP_KEEPALIVE => 1,
+                CURLOPT_TCP_KEEPIDLE => 30,
+                CURLOPT_FRESH_CONNECT => false,
+                CURLOPT_FORBID_REUSE => false
             ]);
         }
         
         $apiResponse = curl_exec($ch);
         $httpStatus = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlError = curl_error($ch);
+        $curlErrno = curl_errno($ch);
         curl_close($ch);
         
-        // Deneme sayısını artır ve son deneme tarihini güncelle
+        // cURL hatası kontrolü
+        if ($curlError) {
+            $isTimeoutError = (stripos($curlError, 'timeout') !== false || $curlErrno == CURLE_OPERATION_TIMEDOUT);
+            
+            if ($isTimeoutError) {
+                logMessage("⚠ TIMEOUT: $curlError (Deneme: " . ($denemeSayisi + 1) . "/$DENEME_LIMIT)");
+                
+                // Timeout hatalarında son_gonderim_denemesi GÜNCELLENMESİN (hemen tekrar denensin)
+                // Sadece deneme sayısını artır
+                $updateDenemeSql = "UPDATE API_basvuruListesi SET 
+                                    API_basvuru_gonderim_deneme_sayisi = ?
+                                    WHERE API_basvuru_ID = ?";
+                $updateDenemeStmt = $conn->prepare($updateDenemeSql);
+                $updateDenemeStmt->execute([$denemeSayisi + 1, $basvuruId]);
+                
+                logMessage("💡 Timeout hatası, bir sonraki çalışmada hemen tekrar denenecek");
+            } else {
+                logMessage("HATA: cURL hatası - $curlError");
+                
+                // Diğer hatalar için normal güncelleme
+                $updateDenemeSql = "UPDATE API_basvuruListesi SET 
+                                    API_basvuru_gonderim_deneme_sayisi = ?,
+                                    API_basvuru_son_gonderim_denemesi = GETDATE()
+                                    WHERE API_basvuru_ID = ?";
+                $updateDenemeStmt = $conn->prepare($updateDenemeSql);
+                $updateDenemeStmt->execute([$denemeSayisi + 1, $basvuruId]);
+            }
+            
+            $errorCount++;
+            continue;
+        }
+        
+        // Başarılı istek - deneme sayısını artır ve son deneme tarihini güncelle
         $updateDenemeSql = "UPDATE API_basvuruListesi SET 
                             API_basvuru_gonderim_deneme_sayisi = ?,
                             API_basvuru_son_gonderim_denemesi = GETDATE()
@@ -324,11 +381,6 @@ try {
         $updateDenemeStmt = $conn->prepare($updateDenemeSql);
         $updateDenemeStmt->execute([$denemeSayisi + 1, $basvuruId]);
         
-        if ($curlError) {
-            logMessage("HATA: cURL hatası - $curlError");
-            $errorCount++;
-            continue;
-        }
         
         logMessage("HTTP Status: $httpStatus");
         
@@ -462,6 +514,33 @@ try {
             ]);
         }
         
+        // ===== Case Çakışması Kontrolü =====
+        // "Bir Dakika İçerisinde Aynı Case" hatası varsa, deneme sayısını sıfırla ve 2 dakika beklet
+        if (!empty($responseMessage) && stripos($responseMessage, 'Bir Dakika İçerisinde Aynı Üyelikte Aynı Case') !== false) {
+            logMessage("⚠ Case çakışması tespit edildi, 2 dakika sonra tekrar denenecek");
+            
+            // Deneme sayısını sıfırla, ama son deneme tarihini koru (5 dakika sonra tekrar denensin)
+            $resetCaseSql = "UPDATE API_basvuruListesi SET 
+                            API_basvuru_gonderim_deneme_sayisi = 0,
+                            API_basvuru_son_gonderim_denemesi = GETDATE()
+                            WHERE API_basvuru_ID = ?";
+            
+            $resetCaseStmt = $conn->prepare($resetCaseSql);
+            $resetCaseStmt->execute([$basvuruId]);
+            
+            logMessage("✓ Başvuru 5 dakika sonra tekrar gönderilecek");
+            
+            // Bu başvuruyu başarısız saymayalım, atlandı olarak sayalım
+            $skipCount++;
+            
+            // Bir sonraki kayda geç
+            if ($basvuru !== end($basvurular)) {
+                sleep($KAYIT_ARASI_BEKLEME);
+            }
+            continue;
+        }
+        // ===== Case Çakışması Kontrolü Sonu =====
+        
         // HTTP status kontrolü
         $isSuccess = ($httpStatus >= 200 && $httpStatus < 300);
         
@@ -478,6 +557,11 @@ try {
         
         // Log kaydı oluştur
         try {
+            // Kullanıcı ID'sini belirle: Başvuruya ait kullanıcı varsa onu, yoksa sistem kullanıcısını (22) kullan
+            $logKullaniciId = !empty($basvuru['API_basvuru_kullanici_ID']) 
+                ? (int)$basvuru['API_basvuru_kullanici_ID'] 
+                : 22;
+            
             $logSql = "INSERT INTO API_Gonderim_Log (
                            log_basvuru_ID,
                            log_islem_yapan_kullanici_ID,
@@ -503,7 +587,7 @@ try {
             $logStmt = $conn->prepare($logSql);
             $logStmt->execute([
                 $basvuruId,
-                22, // Sistem kullanıcısı (Cron otomatik)
+                $logKullaniciId, // Başvuru sahibi veya sistem kullanıcısı
                 $isStatusCheck ? 'Durum Sorgulama (Cron)' : 'Normal Başvuru (Cron)',
                 $apiUrl,
                 'POST',

@@ -165,6 +165,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $messageType = 'success';
                 break;
                 
+            case 'delete':
+                // Silme yetkisi kontrolü
+                if (!$sayfaYetkileri['sil']) {
+                    throw new Exception('Bu işlem için yetkiniz bulunmamaktadır.');
+                }
+                
+                // API kullanıcısını sil
+                $id = $_POST['id'];
+                
+                // Önce bu kullanıcıya ait başvuru var mı kontrol et
+                $checkSql = "SELECT COUNT(*) as count FROM API_basvuruListesi WHERE API_basvuru_kullanici_ID = ?";
+                $checkStmt = $conn->prepare($checkSql);
+                $checkStmt->execute([$id]);
+                $checkResult = $checkStmt->fetch();
+                
+                if ($checkResult['count'] > 0) {
+                    throw new Exception('Bu API kullanıcısına ait başvurular bulunmaktadır. Önce başvuruları silmeniz gerekmektedir.');
+                }
+                
+                $sql = "DELETE FROM API_kullanici WHERE api_iris_kullanici_ID = ?";
+                $stmt = $conn->prepare($sql);
+                $stmt->execute([$id]);
+                
+                $message = 'API kullanıcısı başarıyla silindi.';
+                $messageType = 'success';
+                break;
+                
             case 'edit':
                 // Düzenleme yetkisi kontrolü
                 if (!$sayfaYetkileri['duzenle']) {
@@ -933,6 +960,23 @@ include '../../../includes/header.php';
                                                 </button>
                                                 <?php endif; ?>
                                             <?php endif; ?>
+                                            
+                                            <?php if ($canDelete): ?>
+                                                <?php 
+                                                // Kendi kullanıcı kısıtlaması varsa sadece kendi verilerinde buton göster
+                                                $showDeleteButton = true;
+                                                if ($sayfaYetkileri['kendi_kullanicini_gor'] && $user['users_ID'] != $currentUser['id']) {
+                                                    $showDeleteButton = false;
+                                                }
+                                                ?>
+                                                <?php if ($showDeleteButton): ?>
+                                                <button type="button" class="btn btn-outline-danger" 
+                                                        onclick="deleteApiUser(<?php echo $user['api_iris_kullanici_ID']; ?>, '<?php echo htmlspecialchars($user['api_iris_kullanici_OrganisationCd'] . ' - ' . $user['api_iris_kullanici_LoginCd']); ?>')"
+                                                        title="Sil">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                                <?php endif; ?>
+                                            <?php endif; ?>
                                         </div>
                                     </td>
                                 </tr>
@@ -1508,6 +1552,31 @@ function showTokenModal(userId) {
         console.error('Error:', error);
         showNotification('Kullanıcı bilgisi alınırken hata oluştu.', 'danger');
     });
+}
+
+// API Kullanıcısı Silme
+function deleteApiUser(id, name) {
+    if (confirm(`"${name}" API kullanıcısını silmek istediğinizden emin misiniz?\n\nBu işlem geri alınamaz!`)) {
+        // Form oluştur ve gönder
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = window.location.href;
+        
+        const actionInput = document.createElement('input');
+        actionInput.type = 'hidden';
+        actionInput.name = 'action';
+        actionInput.value = 'delete';
+        form.appendChild(actionInput);
+        
+        const idInput = document.createElement('input');
+        idInput.type = 'hidden';
+        idInput.name = 'id';
+        idInput.value = id;
+        form.appendChild(idInput);
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
 }
 </script>
 

@@ -482,6 +482,7 @@ PHP;
                 $userGroupId = (int)$_POST['user_group_id'];
                 $gor = isset($_POST['gor']) ? 1 : 0;
                 $kendiKullaniciniGor = isset($_POST['kendi_kullanicini_gor']) ? 1 : 0;
+                $sorumluEkibiniGor = isset($_POST['sorumlu_ekibini_gor']) ? 1 : 0;
                 $ekle = isset($_POST['ekle']) ? 1 : 0;
                 $duzenle = isset($_POST['duzenle']) ? 1 : 0;
                 $sil = isset($_POST['sil']) ? 1 : 0;
@@ -510,10 +511,10 @@ PHP;
                     break;
                 }
                 
-                $sql = "INSERT INTO tanim_sayfa_yetkiler (sayfa_id, user_group_id, gor, kendi_kullanicini_gor, ekle, duzenle, sil, durum, created_at) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, GETDATE())";
+                $sql = "INSERT INTO tanim_sayfa_yetkiler (sayfa_id, user_group_id, gor, kendi_kullanicini_gor, sorumlu_ekibini_gor, ekle, duzenle, sil, durum, created_at) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE())";
                 $stmt = $conn->prepare($sql);
-                $stmt->execute([$sayfaId, $userGroupId, $gor, $kendiKullaniciniGor, $ekle, $duzenle, $sil, $durum]);
+                $stmt->execute([$sayfaId, $userGroupId, $gor, $kendiKullaniciniGor, $sorumluEkibiniGor, $ekle, $duzenle, $sil, $durum]);
                 
                 $message = 'Yetki başarıyla tanımlandı.';
                 $messageType = 'success';
@@ -523,6 +524,7 @@ PHP;
                 $yetkiId = (int)$_POST['yetki_id'];
                 $gor = isset($_POST['gor']) ? 1 : 0;
                 $kendiKullaniciniGor = isset($_POST['kendi_kullanicini_gor']) ? 1 : 0;
+                $sorumluEkibiniGor = isset($_POST['sorumlu_ekibini_gor']) ? 1 : 0;
                 $ekle = isset($_POST['ekle']) ? 1 : 0;
                 $duzenle = isset($_POST['duzenle']) ? 1 : 0;
                 $sil = isset($_POST['sil']) ? 1 : 0;
@@ -534,10 +536,10 @@ PHP;
                     break;
                 }
                 
-                $sql = "UPDATE tanim_sayfa_yetkiler SET gor = ?, kendi_kullanicini_gor = ?, ekle = ?, duzenle = ?, sil = ?, durum = ?, updated_at = GETDATE() 
+                $sql = "UPDATE tanim_sayfa_yetkiler SET gor = ?, kendi_kullanicini_gor = ?, sorumlu_ekibini_gor = ?, ekle = ?, duzenle = ?, sil = ?, durum = ?, updated_at = GETDATE() 
                         WHERE sayfa_yetki_id = ?";
                 $stmt = $conn->prepare($sql);
-                $stmt->execute([$gor, $kendiKullaniciniGor, $ekle, $duzenle, $sil, $durum, $yetkiId]);
+                $stmt->execute([$gor, $kendiKullaniciniGor, $sorumluEkibiniGor, $ekle, $duzenle, $sil, $durum, $yetkiId]);
                 
                 $message = 'Yetki başarıyla güncellendi.';
                 $messageType = 'success';
@@ -1547,6 +1549,10 @@ try {
                                         <label class="form-check-label" for="kendi_kullanicini_gor">Kendi Kullanıcısını Gör</label>
                                     </div>
                                     <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" name="sorumlu_ekibini_gor" id="sorumlu_ekibini_gor" value="1">
+                                        <label class="form-check-label" for="sorumlu_ekibini_gor">Sorumlu Ekibini Gör (Back Office)</label>
+                                    </div>
+                                    <div class="form-check form-switch">
                                         <input class="form-check-input" type="checkbox" name="ekle" id="ekle" value="1">
                                         <label class="form-check-label" for="ekle">Ekleme</label>
                                     </div>
@@ -1987,6 +1993,10 @@ try {
                             <label class="form-check-label" for="edit_kendi_kullanicini_gor">Kendi Kullanıcısını Gör</label>
                         </div>
                         <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="sorumlu_ekibini_gor" id="edit_sorumlu_ekibini_gor" value="1">
+                            <label class="form-check-label" for="edit_sorumlu_ekibini_gor">Sorumlu Ekibini Gör (Back Office)</label>
+                        </div>
+                        <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox" name="ekle" id="edit_ekle" value="1">
                             <label class="form-check-label" for="edit_ekle">Ekleme</label>
                         </div>
@@ -2168,6 +2178,7 @@ function editYetki(yetki) {
     document.getElementById('edit_grup_info').value = yetki.grup_adi;
     document.getElementById('edit_gor').checked = yetki.gor == 1;
     document.getElementById('edit_kendi_kullanicini_gor').checked = yetki.kendi_kullanicini_gor == 1;
+    document.getElementById('edit_sorumlu_ekibini_gor').checked = yetki.sorumlu_ekibini_gor == 1;
     document.getElementById('edit_ekle').checked = yetki.ekle == 1;
     document.getElementById('edit_duzenle').checked = yetki.duzenle == 1;
     document.getElementById('edit_sil').checked = yetki.sil == 1;

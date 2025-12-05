@@ -61,24 +61,57 @@ include 'includes/header.php';
                             die("Veritabanı bağlantı hatası: " . print_r(sqlsrv_errors(), true));
                         }
                         
-                        // Dashboard'da gösterilecek sayfaları çek
-                        $dashboardQuery = "
-                            SELECT 
-                                s.sayfa_id,
-                                s.sayfa_adi,
-                                s.sayfa_url,
-                                s.sayfa_ikon,
-                                s.sira_no,
-                                m.menu_url,
-                                mo.modul_url
-                            FROM tanim_sayfalar s
-                            INNER JOIN tanim_menuler m ON s.menu_id = m.menu_id
-                            INNER JOIN tanim_moduller mo ON m.modul_id = mo.modul_id
-                            WHERE s.dashboard = 1 AND s.durum = 1
-                            ORDER BY s.sira_no ASC, s.sayfa_id ASC
-                        ";
+                        // Dashboard'da gösterilecek sayfaları çek (yetkilere göre filtreli)
+                        $userGroupId = $currentUser['group_id'];
                         
-                        $dashboardStmt = sqlsrv_query($conn, $dashboardQuery);
+                        if ($userGroupId == 1) {
+                            // Admin: Tüm sayfaları göster
+                            $dashboardQuery = "
+                                SELECT 
+                                    s.sayfa_id,
+                                    s.sayfa_adi,
+                                    s.sayfa_url,
+                                    s.sayfa_ikon,
+                                    s.sira_no,
+                                    m.menu_url,
+                                    mo.modul_url
+                                FROM tanim_sayfalar s
+                                INNER JOIN tanim_menuler m ON s.menu_id = m.menu_id
+                                INNER JOIN tanim_moduller mo ON m.modul_id = mo.modul_id
+                                WHERE s.dashboard = 1 AND s.durum = 1
+                                ORDER BY s.sira_no ASC, s.sayfa_id ASC
+                            ";
+                        } else {
+                            // Diğer kullanıcılar: Sadece yetkili olduğu sayfaları göster
+                            $dashboardQuery = "
+                                SELECT 
+                                    s.sayfa_id,
+                                    s.sayfa_adi,
+                                    s.sayfa_url,
+                                    s.sayfa_ikon,
+                                    s.sira_no,
+                                    m.menu_url,
+                                    mo.modul_url
+                                FROM tanim_sayfalar s
+                                INNER JOIN tanim_menuler m ON s.menu_id = m.menu_id
+                                INNER JOIN tanim_moduller mo ON m.modul_id = mo.modul_id
+                                INNER JOIN tanim_sayfa_yetkiler sy ON s.sayfa_id = sy.sayfa_id
+                                WHERE s.dashboard = 1 
+                                AND s.durum = 1 
+                                AND sy.user_group_id = ?
+                                AND sy.gor = 1
+                                AND sy.durum = 1
+                                ORDER BY s.sira_no ASC, s.sayfa_id ASC
+                            ";
+                        }
+                        
+                        // Parametreli sorgu hazırla
+                        if ($userGroupId == 1) {
+                            $dashboardStmt = sqlsrv_query($conn, $dashboardQuery);
+                        } else {
+                            $params = array($userGroupId);
+                            $dashboardStmt = sqlsrv_query($conn, $dashboardQuery, $params);
+                        }
                         
                         if ($dashboardStmt === false) {
                             echo '<div class="col-12"><div class="alert alert-warning">Dashboard verileri yüklenemedi.</div></div>';
